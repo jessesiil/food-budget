@@ -5,4 +5,4 @@
 //
 // You can override this without editing the file by setting
 // `window.BACKEND_URL_OVERRIDE = "..."` in the browser console.
-const BACKEND_URL = window.BACKEND_URL_OVERRIDE || "https://food-budget-tau.vercel.app";
+const BACKEND_URL = window.BACKEND_URL_OVERRIDE || "https://food-budget-api.onrender.com";
