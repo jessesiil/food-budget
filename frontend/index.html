@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>Food Budget</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Food Budget</h1>
+    <p class="subtitle">Phase 0 — wiring check</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Backend connection</h2>
+      <p class="hint">Calls <code>/api/hello</code> on the backend.</p>
+      <button id="test-backend">Test backend</button>
+      <pre id="backend-result">(not run yet)</pre>
+    </section>
+
+    <section>
+      <h2>Database connection</h2>
+      <p class="hint">Calls <code>/api/test-db</code>, which reads the <code>_ping</code> table.</p>
+      <button id="test-db">Test database</button>
+      <pre id="db-result">(not run yet)</pre>
+    </section>
+
+    <section class="config">
+      <h2>Configuration</h2>
+      <p class="hint">Backend URL: <code id="backend-url-display"></code></p>
+      <p class="hint">Edit <code>config.js</code> to point at a different backend.</p>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
