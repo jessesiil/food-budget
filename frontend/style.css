@@ -369,3 +369,257 @@ h2 {
     font-size: 0.9rem;
   }
 }
+
+/* Dashboard */
+.dashboard-month-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dashboard-nav-btn {
+  background: white;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #2563eb;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.dashboard-nav-btn:hover:not(:disabled) {
+  background: #f0f6ff;
+  border-color: #2563eb;
+}
+
+.dashboard-nav-btn:disabled {
+  color: #ccc;
+  border-color: #e0e0e0;
+  cursor: not-allowed;
+}
+
+.dashboard-month-label {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #1a1a1a;
+  min-width: 120px;
+  text-align: center;
+}
+
+/* Dashboard tabs (mobile: Spend/Categories/Purchases; only visible on mobile) */
+.dashboard-tabs {
+  display: flex;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  gap: 0;
+  margin-bottom: 16px;
+}
+
+.dashboard-tab-button {
+  flex: 1;
+  padding: 12px 16px;
+  background: white;
+  color: #666;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dashboard-tab-button:active {
+  transform: none;
+  background: #f5f5f5;
+}
+
+.dashboard-tab-button.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+/* Dashboard tab content */
+.dashboard-tab-content {
+  display: none;
+}
+
+.dashboard-tab-content.active {
+  display: block;
+}
+
+/* Charts grid - stack on mobile, side-by-side on desktop */
+.dashboard-charts-grid {
+  display: block;
+}
+
+/* Charts containers */
+.spend-chart-container,
+.categories-chart-container {
+  background: white;
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.spend-chart-container h3,
+.categories-chart-container h3 {
+  margin: 0 0 16px 0;
+  font-size: 1.05rem;
+  color: #1a1a1a;
+}
+
+#dashboard-spend-canvas,
+#dashboard-categories-canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+.dashboard-total {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #2563eb;
+}
+
+.dashboard-empty-state {
+  padding: 24px 16px;
+  text-align: center;
+  color: #666;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+/* Purchases filter bar */
+.purchases-filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.dashboard-filter-select {
+  flex: 1;
+  min-width: 150px;
+  padding: 10px 12px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  -webkit-appearance: none;
+  appearance: none;
+  background: white;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 32px;
+}
+
+#dashboard-clear-filters {
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+/* Purchases table */
+.dashboard-purchases-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dashboard-purchases-table thead {
+  background: #f9fafb;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dashboard-purchases-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1a1a1a;
+  border-right: 1px solid #e0e0e0;
+  user-select: none;
+}
+
+.dashboard-purchases-table th:last-child {
+  border-right: none;
+}
+
+.dashboard-purchases-table th.sortable {
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dashboard-purchases-table th.sortable:hover {
+  background: #f0f6ff;
+}
+
+.sort-indicator {
+  font-size: 0.8rem;
+  color: #999;
+  margin-left: 4px;
+}
+
+.dashboard-purchases-table th.sort-asc .sort-indicator::before {
+  content: "▲";
+  color: #2563eb;
+}
+
+.dashboard-purchases-table th.sort-desc .sort-indicator::before {
+  content: "▼";
+  color: #2563eb;
+}
+
+.dashboard-purchases-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e0e0e0;
+  border-right: 1px solid #e0e0e0;
+  font-size: 0.95rem;
+}
+
+.dashboard-purchases-table td:last-child {
+  border-right: none;
+}
+
+.dashboard-purchases-table tbody tr:hover {
+  background: #fafafa;
+}
+
+/* Responsive: laptop view (>= 768px) */
+@media (min-width: 768px) {
+  /* Hide mobile dashboard tabs on laptop */
+  .dashboard-tabs {
+    display: none;
+  }
+
+  /* Create a two-column layout for spend and categories charts */
+  .dashboard-charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  /* Show both chart panels side-by-side on desktop */
+  #dashboard-spend,
+  #dashboard-categories {
+    display: block !important;
+  }
+
+  .spend-chart-container,
+  .categories-chart-container {
+    margin-bottom: 0;
+  }
+}

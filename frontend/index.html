@@ -16,6 +16,7 @@
   <nav class="tab-bar">
     <button class="tab-button active" data-tab="log-purchase">Log Purchase</button>
     <button class="tab-button" data-tab="pantry">Pantry</button>
+    <button class="tab-button" data-tab="dashboard">Dashboard</button>
   </nav>
 
   <main>
@@ -203,8 +204,80 @@
       <h2>Products in pantry</h2>
       <div id="pantry-products" class="pantry-products-list"></div>
     </section>
+
+    <!-- Dashboard tab -->
+    <section id="dashboard" class="tab-content">
+      <div id="dashboard-error" class="error-message"></div>
+
+      <!-- Month selector -->
+      <div class="dashboard-month-selector">
+        <button id="dashboard-prev-month" class="dashboard-nav-btn">‹</button>
+        <span id="dashboard-current-month" class="dashboard-month-label">May 2026</span>
+        <button id="dashboard-next-month" class="dashboard-nav-btn">›</button>
+      </div>
+
+      <!-- Sub-tabs for mobile / responsive layout -->
+      <div class="dashboard-tabs">
+        <button class="dashboard-tab-button active" data-dashboard-tab="spend">Spend</button>
+        <button class="dashboard-tab-button" data-dashboard-tab="categories">Categories</button>
+        <button class="dashboard-tab-button" data-dashboard-tab="purchases">Purchases</button>
+      </div>
+
+      <!-- Charts grid (side-by-side on desktop, stacked on mobile) -->
+      <div class="dashboard-charts-grid">
+        <!-- Spend panel (Spend tab on mobile, left side of Charts tab on laptop) -->
+        <div id="dashboard-spend" class="dashboard-tab-content active">
+          <div class="spend-chart-container">
+            <h3 id="dashboard-spend-title">Spend — May 2026</h3>
+            <canvas id="dashboard-spend-canvas"></canvas>
+            <div id="dashboard-spend-empty" class="dashboard-empty-state" style="display:none">No purchases recorded for this month</div>
+            <div id="dashboard-spend-total" class="dashboard-total">Total: €0.00</div>
+          </div>
+        </div>
+
+        <!-- Categories panel (Categories tab on mobile, right side of Charts tab on laptop) -->
+        <div id="dashboard-categories" class="dashboard-tab-content">
+          <div class="categories-chart-container">
+            <h3 id="dashboard-categories-title">By Category — May 2026</h3>
+            <canvas id="dashboard-categories-canvas"></canvas>
+            <div id="dashboard-categories-empty" class="dashboard-empty-state" style="display:none">No purchases recorded for this month</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Purchases panel (Purchases tab on mobile/laptop) -->
+      <div id="dashboard-purchases" class="dashboard-tab-content">
+        <div class="purchases-filter-bar">
+          <select id="dashboard-filter-category" class="dashboard-filter-select">
+            <option value="">All categories</option>
+          </select>
+          <select id="dashboard-filter-store" class="dashboard-filter-select">
+            <option value="">All stores</option>
+          </select>
+          <button id="dashboard-clear-filters" class="btn-secondary">Clear filters</button>
+        </div>
+
+        <table class="dashboard-purchases-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="date">Date <span class="sort-indicator"></span></th>
+              <th class="sortable" data-sort="product_name">Product <span class="sort-indicator"></span></th>
+              <th class="sortable" data-sort="store_name">Store <span class="sort-indicator"></span></th>
+              <th class="sortable" data-sort="category">Category <span class="sort-indicator"></span></th>
+              <th class="sortable" data-sort="quantity">Qty <span class="sort-indicator"></span></th>
+              <th class="sortable" data-sort="price_total">Price <span class="sort-indicator"></span></th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-purchases-tbody">
+          </tbody>
+        </table>
+
+        <div id="dashboard-purchases-empty" class="dashboard-empty-state">No purchases for this month</div>
+      </div>
+    </section>
   </main>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>

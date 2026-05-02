@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPurchaseForm();
   setupNewProductForm();
   setupPantryForm();
+  setupDashboard();
 });
 
 // ============================================================================
@@ -110,6 +111,11 @@ function switchTab(tabName) {
   if (tabName === "pantry") {
     loadPantryProducts();
   }
+
+  // Initialize dashboard when switching to dashboard tab
+  if (tabName === "dashboard") {
+    initializeDashboard();
+  }
 }
 
 // ============================================================================
@@ -138,6 +144,7 @@ function setupPurchaseForm() {
 
 async function handlePurchaseSubmit(e) {
   e.preventDefault();
+  clearError("log-purchase-error");
 
   const productSelect = document.getElementById("purchase-product");
   const storeSelect = document.getElementById("purchase-store");
@@ -236,6 +243,13 @@ function setupNewProductForm() {
     container.classList.add("hidden");
     clearNewProductForm();
   });
+
+  // Clear the grocery/unit warning immediately when the user picks a unit
+  document.getElementById("new-product-unit").addEventListener("change", function() {
+    if (this.value) {
+      clearError("new-product-error");
+    }
+  });
 }
 
 async function handleSaveNewProduct() {
@@ -249,6 +263,8 @@ async function handleSaveNewProduct() {
   const categoryInput = document.getElementById("new-product-category");
   const unitInput = document.getElementById("new-product-unit");
   const errorEl = document.getElementById("new-product-error");
+
+  clearError("new-product-error");
 
   const name = nameInput.value.trim();
   if (!name) {
@@ -333,10 +349,18 @@ function clearNewProductForm() {
 function setupPantryForm() {
   const form = document.getElementById("pantry-product-form");
   form.addEventListener("submit", (e) => handlePantryProductSubmit(e));
+
+  // Clear the grocery/unit warning immediately when the user picks a unit
+  document.getElementById("pantry-product-unit").addEventListener("change", function() {
+    if (this.value) {
+      clearError("pantry-error");
+    }
+  });
 }
 
 async function handlePantryProductSubmit(e) {
   e.preventDefault();
+  clearError("pantry-error");
 
   const nameInput = document.getElementById("pantry-product-name");
   const brandInput = document.getElementById("pantry-product-brand");
@@ -520,90 +544,435 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
-!productList || productList.length === 0) {
-    container.innerHTML = '<div class="product-empty">No products yet. Add one via Log Purchase.</div>';
+
+// ============================================================================
+// Dashboard
+// ============================================================================
+
+let dashboardMonth = null;
+let spendChart = null;
+let categoryChart = null;
+let dashboardCurrentSortBy = "date";
+let dashboardCurrentSortDir = "asc";
+
+function setupDashboard() {
+  // Initialize month to current month
+  const now = new Date();
+  dashboardMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  // Month navigation
+  document.getElementById("dashboard-prev-month").addEventListener("click", () => {
+    previousMonth();
+  });
+  document.getElementById("dashboard-next-month").addEventListener("click", () => {
+    nextMonth();
+  });
+
+  // Dashboard sub-tabs (mobile)
+  document.querySelectorAll(".dashboard-tab-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      const tabName = button.dataset.dashboardTab;
+      switchDashboardTab(tabName);
+    });
+  });
+
+  // Purchases filter
+  document.getElementById("dashboard-filter-category").addEventListener("change", () => {
+    loadDashboardPurchases();
+  });
+  document.getElementById("dashboard-filter-store").addEventListener("change", () => {
+    loadDashboardPurchases();
+  });
+  document.getElementById("dashboard-clear-filters").addEventListener("click", () => {
+    clearDashboardFilters();
+  });
+
+  // Purchases table sorting
+  document.querySelectorAll(".dashboard-purchases-table th.sortable").forEach((th) => {
+    th.addEventListener("click", () => {
+      const sortBy = th.dataset.sort;
+      if (dashboardCurrentSortBy === sortBy) {
+        dashboardCurrentSortDir = dashboardCurrentSortDir === "asc" ? "desc" : "asc";
+      } else {
+        dashboardCurrentSortBy = sortBy;
+        dashboardCurrentSortDir = "asc";
+      }
+      loadDashboardPurchases();
+    });
+  });
+}
+
+function initializeDashboard() {
+  updateDashboardMonthLabel();
+  updateMonthNavigationButtons();
+  loadDashboardData();
+}
+
+function previousMonth() {
+  const date = new Date(dashboardMonth + "-01");
+  date.setMonth(date.getMonth() - 1);
+  dashboardMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  updateDashboardMonthLabel();
+  updateMonthNavigationButtons();
+  loadDashboardData();
+}
+
+function nextMonth() {
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const date = new Date(dashboardMonth + "-01");
+  date.setMonth(date.getMonth() + 1);
+  const nextMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+  // Don't allow navigating beyond the current month
+  if (nextMonth > currentMonth) {
     return;
   }
 
-  container.innerHTML = productList
-    .map((product) => {
-      let html = `<div class="product-card">
-        <h3>${escapeHtml(product.name)}</h3>`;
+  dashboardMonth = nextMonth;
+  updateDashboardMonthLabel();
+  updateMonthNavigationButtons();
+  loadDashboardData();
+}
 
-      if (product.brand) {
-        html += `<div class="product-brand">${escapeHtml(product.brand)}</div>`;
-      }
+function updateDashboardMonthLabel() {
+  const [year, month] = dashboardMonth.split("-");
+  const date = new Date(year, parseInt(month) - 1);
+  const monthName = date.toLocaleString("en-US", { month: "long", year: "numeric" });
+  document.getElementById("dashboard-current-month").textContent = monthName;
 
-      // Category badge
-      if (product.category) {
-        html += `<div class="product-category"><span class="badge">${escapeHtml(product.category)}</span></div>`;
-      }
+  // Update chart titles
+  document.getElementById("dashboard-spend-title").textContent = `Spend — ${monthName}`;
+  document.getElementById("dashboard-categories-title").textContent = `By Category — ${monthName}`;
+}
 
-      // Unit info
-      if (product.unit) {
-        html += `<div class="product-unit">Unit: ${escapeHtml(product.unit)}</div>`;
-      }
+function updateMonthNavigationButtons() {
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-      // Nutrition data (skip nulls)
-      const nutrition = [];
-      if (product.calories_per_100g != null) {
-        nutrition.push({ label: "Calories/100g", value: product.calories_per_100g });
-      }
-      if (product.protein_per_100g != null) {
-        nutrition.push({ label: "Protein/100g", value: product.protein_per_100g });
-      }
-      if (product.carbs_per_100g != null) {
-        nutrition.push({ label: "Carbs/100g", value: product.carbs_per_100g });
-      }
-      if (product.fat_per_100g != null) {
-        nutrition.push({ label: "Fat/100g", value: product.fat_per_100g });
-      }
+  // Disable next button if at current month
+  const nextBtn = document.getElementById("dashboard-next-month");
+  nextBtn.disabled = dashboardMonth >= currentMonth;
 
-      if (nutrition.length > 0) {
-        html += '<div class="product-nutrition">';
-        nutrition.forEach((item) => {
-          html += `<div class="product-nutrition-item">
-            <span>${item.label}</span>
-            <span>${item.value}</span>
-          </div>`;
-        });
-        html += "</div>";
-      }
+  // Disable prev button if too far back (optional: adjust as needed)
+  const prevBtn = document.getElementById("dashboard-prev-month");
+  prevBtn.disabled = false;
+}
 
-      html += "</div>";
-      return html;
+function switchDashboardTab(tabName) {
+  document.querySelectorAll(".dashboard-tab-button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.dashboardTab === tabName);
+  });
+
+  document.querySelectorAll(".dashboard-tab-content").forEach((content) => {
+    content.classList.toggle("active", content.id === `dashboard-${tabName}`);
+  });
+
+  // Trigger chart redraw on tab switch if needed (to account for container size changes)
+  if (tabName === "spend" && spendChart) {
+    spendChart.resize();
+  } else if (tabName === "categories" && categoryChart) {
+    categoryChart.resize();
+  }
+}
+
+async function loadDashboardData() {
+  clearError("dashboard-error");
+  try {
+    await Promise.all([
+      loadDashboardSpend(),
+      loadDashboardCategories(),
+      loadDashboardPurchases()
+    ]);
+  } catch (err) {
+    showError("dashboard-error", `Error loading dashboard: ${err.message}`);
+  }
+}
+
+async function loadDashboardSpend() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/dashboard/spend?month=${dashboardMonth}`);
+    if (!response.ok) {
+      throw new Error("Failed to load spend data");
+    }
+
+    const data = await response.json();
+    renderSpendChart(data);
+  } catch (err) {
+    showError("dashboard-error", `Error loading spend: ${err.message}`);
+  }
+}
+
+function renderSpendChart(data) {
+  const emptyDiv = document.getElementById("dashboard-spend-empty");
+  const canvas = document.getElementById("dashboard-spend-canvas");
+  const totalDiv = document.getElementById("dashboard-spend-total");
+
+  if (!data || data.length === 0) {
+    emptyDiv.style.display = "block";
+    canvas.style.display = "none";
+    totalDiv.style.display = "none";
+    if (spendChart) {
+      spendChart.destroy();
+      spendChart = null;
+    }
+    totalDiv.textContent = "Total: €0.00";
+    return;
+  }
+
+  // Show chart and total, hide empty state
+  emptyDiv.style.display = "none";
+  canvas.style.display = "block";
+  totalDiv.style.display = "block";
+
+  // Calculate cumulative spend and prepare labels
+  let cumulative = 0;
+  const labels = [];
+  const chartData = [];
+
+  data.forEach((item) => {
+    labels.push(item.date);
+    cumulative += parseFloat(item.daily_spend);
+    chartData.push(cumulative);
+  });
+
+  // Calculate total
+  const total = cumulative.toFixed(2);
+  document.getElementById("dashboard-spend-total").textContent = `Total: €${total}`;
+
+  // Destroy old chart if exists
+  if (spendChart) {
+    spendChart.destroy();
+  }
+
+  const ctx = document.getElementById("dashboard-spend-canvas").getContext("2d");
+  spendChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "Cumulative Spend (€)",
+          data: chartData,
+          borderColor: "#2563eb",
+          backgroundColor: "rgba(37, 99, 235, 0.1)",
+          tension: 0.3,
+          fill: true,
+          pointRadius: 4,
+          pointBackgroundColor: "#2563eb",
+          pointBorderColor: "#fff",
+          pointBorderWidth: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          display: true
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: function(value) {
+              return "€" + value.toFixed(2);
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+async function loadDashboardCategories() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/dashboard/categories?month=${dashboardMonth}`);
+    if (!response.ok) {
+      throw new Error("Failed to load categories data");
+    }
+
+    const data = await response.json();
+    renderCategoriesChart(data);
+  } catch (err) {
+    showError("dashboard-error", `Error loading categories: ${err.message}`);
+  }
+}
+
+function renderCategoriesChart(data) {
+  const emptyDiv = document.getElementById("dashboard-categories-empty");
+  const canvas = document.getElementById("dashboard-categories-canvas");
+
+  if (!data || data.length === 0) {
+    emptyDiv.style.display = "block";
+    canvas.style.display = "none";
+    if (categoryChart) {
+      categoryChart.destroy();
+      categoryChart = null;
+    }
+    return;
+  }
+
+  // Show chart, hide empty state
+  emptyDiv.style.display = "none";
+  canvas.style.display = "block";
+
+  // Prepare data
+  const labels = data.map((item) => escapeHtml(item.category));
+  const chartData = data.map((item) => parseFloat(item.total_spend));
+
+  // Destroy old chart if exists
+  if (categoryChart) {
+    categoryChart.destroy();
+  }
+
+  const ctx = document.getElementById("dashboard-categories-canvas").getContext("2d");
+  categoryChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "Total Spend (€)",
+          data: chartData,
+          backgroundColor: "rgba(37, 99, 235, 0.7)",
+          borderColor: "#2563eb",
+          borderWidth: 1
+        }
+      ]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          display: true
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: {
+            callback: function(value) {
+              return "€" + value.toFixed(2);
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+async function loadDashboardPurchases() {
+  try {
+    const categoryFilter = document.getElementById("dashboard-filter-category").value;
+    const storeFilter = document.getElementById("dashboard-filter-store").value;
+
+    let url = `${BACKEND_URL}/api/purchases?month=${dashboardMonth}&sort_by=${dashboardCurrentSortBy}&sort_dir=${dashboardCurrentSortDir}`;
+    if (categoryFilter) {
+      url += `&category=${encodeURIComponent(categoryFilter)}`;
+    }
+    if (storeFilter) {
+      url += `&store_id=${encodeURIComponent(storeFilter)}`;
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("Failed to load purchases");
+    }
+
+    const data = await response.json();
+    renderDashboardPurchases(data);
+    updateDashboardSortIndicators();
+    populateDashboardFilters(data);
+  } catch (err) {
+    showError("dashboard-error", `Error loading purchases: ${err.message}`);
+  }
+}
+
+function renderDashboardPurchases(purchaseList) {
+  const tbody = document.getElementById("dashboard-purchases-tbody");
+  const emptyState = document.getElementById("dashboard-purchases-empty");
+
+  if (!purchaseList || purchaseList.length === 0) {
+    tbody.innerHTML = "";
+    emptyState.style.display = "block";
+    return;
+  }
+
+  emptyState.style.display = "none";
+
+  tbody.innerHTML = purchaseList
+    .map((purchase) => {
+      const date = new Date(purchase.date).toLocaleDateString("en-GB");
+      const product = escapeHtml(purchase.product_name);
+      const store = purchase.store_name ? escapeHtml(purchase.store_name) : "—";
+      const category = escapeHtml(purchase.category);
+      const qty = purchase.quantity ? parseFloat(purchase.quantity).toFixed(2) : "—";
+      const price = parseFloat(purchase.price_total).toFixed(2);
+
+      return `<tr>
+        <td>${date}</td>
+        <td>${product}</td>
+        <td>${store}</td>
+        <td>${category}</td>
+        <td>${qty}</td>
+        <td>€${price}</td>
+      </tr>`;
     })
     .join("");
 }
 
-// ============================================================================
-// Utilities
-// ============================================================================
+function populateDashboardFilters(purchaseList) {
+  // Populate category filter
+  const categorySet = new Set();
+  purchaseList.forEach((p) => {
+    categorySet.add(p.category);
+  });
 
-function showError(elementId, message) {
-  const el = document.getElementById(elementId);
-  el.textContent = message;
-  el.style.display = "block";
+  const categorySelect = document.getElementById("dashboard-filter-category");
+  const currentValue = categorySelect.value;
+  categorySelect.innerHTML = '<option value="">All categories</option>';
+  Array.from(categorySet)
+    .sort()
+    .forEach((cat) => {
+      const option = document.createElement("option");
+      option.value = cat;
+      option.textContent = cat;
+      categorySelect.appendChild(option);
+    });
+  categorySelect.value = currentValue;
+
+  // Populate store filter from the global stores array
+  const storeSelect = document.getElementById("dashboard-filter-store");
+  const currentStoreValue = storeSelect.value;
+  storeSelect.innerHTML = '<option value="">All stores</option>';
+  stores.forEach((store) => {
+    const option = document.createElement("option");
+    option.value = store.id;
+    option.textContent = store.name;
+    storeSelect.appendChild(option);
+  });
+  storeSelect.value = currentStoreValue;
 }
 
-function showSuccess(elementId, message) {
-  const el = document.getElementById(elementId);
-  el.textContent = message;
-  el.style.display = "block";
-  setTimeout(() => {
-    el.style.display = "none";
-    el.textContent = "";
-  }, 3000);
+function updateDashboardSortIndicators() {
+  document.querySelectorAll(".dashboard-purchases-table th.sortable").forEach((th) => {
+    th.classList.remove("sort-asc", "sort-desc");
+    if (th.dataset.sort === dashboardCurrentSortBy) {
+      th.classList.add(`sort-${dashboardCurrentSortDir}`);
+    }
+  });
 }
 
-function clearError(elementId) {
-  const el = document.getElementById(elementId);
-  el.textContent = "";
-  el.style.display = "none";
-}
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
+function clearDashboardFilters() {
+  document.getElementById("dashboard-filter-category").value = "";
+  document.getElementById("dashboard-filter-store").value = "";
+  dashboardCurrentSortBy = "date";
+  dashboardCurrentSortDir = "asc";
+  loadDashboardPurchases();
 }

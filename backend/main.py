@@ -15,13 +15,13 @@ Phase 1 endpoints (product + purchase management):
 
 import os
 from contextlib import contextmanager
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 import logging
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -74,6 +74,41 @@ app.add_middleware(
 logger.info("FRONTEND_ORIGIN loaded: %s", FRONTEND_ORIGIN)
 
 
+# Sorting whitelists for query safety
+SORT_COLUMN_MAP = {
+    "date": "pu.date",
+    "price_total": "pu.price_total",
+    "product_name": "p.name",
+}
+SORT_DIR_MAP = {"asc": "ASC", "desc": "DESC"}
+
+
+def get_month_boundaries(month_str: str | None) -> tuple[str, str, str]:
+    """
+    Parse month_str (YYYY-MM format) or use current month.
+    Returns (month_str, first_day, next_month_first_day) as ISO date strings.
+    """
+    if month_str:
+        try:
+            dt = datetime.strptime(month_str, "%Y-%m")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="month must be in YYYY-MM format")
+    else:
+        dt = datetime.now()
+
+    year, month = dt.year, dt.month
+    month_str = f"{year:04d}-{month:02d}"
+    first_day = f"{year:04d}-{month:02d}-01"
+
+    # Calculate next month's first day
+    if month == 12:
+        next_month_first_day = f"{year+1:04d}-01-01"
+    else:
+        next_month_first_day = f"{year:04d}-{month+1:02d}-01"
+
+    return month_str, first_day, next_month_first_day
+
+
 # Pydantic models for request/response validation and serialization.
 
 class ProductIn(BaseModel):
@@ -117,12 +152,41 @@ class PurchaseOut(BaseModel):
     """Purchase response model."""
     id: int
     product_id: int
+    product_name: str
     store_id: int | None
+    store_name: str | None
+    category: str
     date: date
     quantity: float | None
     price_total: float
     notes: str | None
     created_at: str
+
+
+class DailySpendOut(BaseModel):
+    """Daily spend entry for dashboard."""
+    date: str
+    amount: float
+
+
+class DashboardSpendOut(BaseModel):
+    """Dashboard spend response."""
+    month: str
+    total: float
+    days: list[DailySpendOut]
+
+
+class CategorySpendOut(BaseModel):
+    """Category spend entry for dashboard."""
+    category: str
+    amount: float
+
+
+class DashboardCategoriesOut(BaseModel):
+    """Dashboard categories response."""
+    month: str
+    total: float
+    categories: list[CategorySpendOut]
 
 
 @contextmanager
@@ -330,11 +394,37 @@ def create_purchase(request: Request, purchase: PurchaseIn):
                     ),
                 )
                 row = cur.fetchone()
+                purchase_id = row[0]
+                product_id = row[1]
+                store_id = row[2]
+
+                # Fetch product name and category
+                cur.execute(
+                    "SELECT name, category FROM products WHERE id = %s",
+                    (product_id,),
+                )
+                product_row = cur.fetchone()
+                product_name = product_row[0]
+                category = product_row[1]
+
+                # Fetch store name if store_id exists
+                store_name = None
+                if store_id is not None:
+                    cur.execute(
+                        "SELECT name FROM stores WHERE id = %s",
+                        (store_id,),
+                    )
+                    store_row = cur.fetchone()
+                    store_name = store_row[0] if store_row else None
+
                 conn.commit()
                 return {
-                    "id": row[0],
-                    "product_id": row[1],
-                    "store_id": row[2],
+                    "id": purchase_id,
+                    "product_id": product_id,
+                    "product_name": product_name,
+                    "store_id": store_id,
+                    "store_name": store_name,
+                    "category": category,
                     "date": row[3],
                     "quantity": row[4],
                     "price_total": row[5],
@@ -346,16 +436,166 @@ def create_purchase(request: Request, purchase: PurchaseIn):
     except Exception as e:
         logger.error("Unexpected error in create_purchase: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
-,
-                    "store_id": row[2],
-                    "date": row[3],
-                    "quantity": row[4],
-                    "price_total": row[5],
-                    "notes": row[6],
-                    "created_at": row[7].isoformat() if row[7] else None,
+
+
+@app.get("/api/purchases", response_model=list[PurchaseOut])
+@limiter.limit("30/minute")
+def get_purchases(
+    request: Request,
+    month: str | None = Query(None, description="Filter by month (YYYY-MM format)"),
+    category: str | None = Query(None, description="Filter by product category"),
+    store_id: int | None = Query(None, description="Filter by store ID"),
+    sort_by: str = Query("date", description="Column to sort by: date, price_total, product_name"),
+    sort_dir: str = Query("desc", description="Sort direction: asc or desc"),
+):
+    """Returns all purchases with optional filters and sorting."""
+    try:
+        # Validate sort parameters
+        if sort_by not in SORT_COLUMN_MAP:
+            raise HTTPException(status_code=400, detail=f"Invalid sort_by: {sort_by}")
+        if sort_dir not in SORT_DIR_MAP:
+            raise HTTPException(status_code=400, detail=f"Invalid sort_dir: {sort_dir}")
+
+        sort_column = SORT_COLUMN_MAP[sort_by]
+        sort_direction = SORT_DIR_MAP[sort_dir]
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                # Build WHERE clause and params
+                where_clauses = []
+                params = []
+
+                if month:
+                    month_str, first_day, next_month_first_day = get_month_boundaries(month)
+                    where_clauses.append("pu.date >= %s AND pu.date < %s")
+                    params.extend([first_day, next_month_first_day])
+
+                if category:
+                    where_clauses.append("p.category = %s")
+                    params.append(category)
+
+                if store_id is not None:
+                    where_clauses.append("pu.store_id = %s")
+                    params.append(store_id)
+
+                where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+                # Build and execute query with safe sort column interpolation
+                query = f"""
+                    SELECT pu.id, pu.product_id, p.name, pu.store_id, s.name,
+                           p.category, pu.date, pu.quantity, pu.price_total, pu.notes, pu.created_at
+                    FROM purchases pu
+                    JOIN products p ON p.id = pu.product_id
+                    LEFT JOIN stores s ON s.id = pu.store_id
+                    {where_clause}
+                    ORDER BY {sort_column} {sort_direction}
+                """
+                cur.execute(query, params)
+                rows = cur.fetchall()
+
+                return [
+                    {
+                        "id": row[0],
+                        "product_id": row[1],
+                        "product_name": row[2],
+                        "store_id": row[3],
+                        "store_name": row[4],
+                        "category": row[5],
+                        "date": row[6],
+                        "quantity": row[7],
+                        "price_total": row[8],
+                        "notes": row[9],
+                        "created_at": row[10].isoformat() if row[10] else None,
+                    }
+                    for row in rows
+                ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in get_purchases: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/dashboard/spend", response_model=DashboardSpendOut)
+@limiter.limit("30/minute")
+def get_dashboard_spend(
+    request: Request,
+    month: str | None = Query(None, description="Month in YYYY-MM format (defaults to current month)"),
+):
+    """Returns daily spend totals for the given month for a line chart."""
+    try:
+        month_str, first_day, next_month_first_day = get_month_boundaries(month)
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT date::text, SUM(price_total)
+                    FROM purchases
+                    WHERE date >= %s AND date < %s
+                    GROUP BY date
+                    ORDER BY date
+                    """,
+                    (first_day, next_month_first_day),
+                )
+                rows = cur.fetchall()
+
+                total = sum(float(row[1]) for row in rows)
+                days = [
+                    {"date": row[0], "amount": float(row[1])}
+                    for row in rows
+                ]
+
+                return {
+                    "month": month_str,
+                    "total": total,
+                    "days": days,
                 }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Unexpected error in create_purchase: %s", e)
+        logger.error("Unexpected error in get_dashboard_spend: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/dashboard/categories", response_model=DashboardCategoriesOut)
+@limiter.limit("30/minute")
+def get_dashboard_categories(
+    request: Request,
+    month: str | None = Query(None, description="Month in YYYY-MM format (defaults to current month)"),
+):
+    """Returns total spend grouped by product category for the given month for a bar chart."""
+    try:
+        month_str, first_day, next_month_first_day = get_month_boundaries(month)
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT p.category, SUM(pu.price_total)
+                    FROM purchases pu
+                    JOIN products p ON p.id = pu.product_id
+                    WHERE pu.date >= %s AND pu.date < %s
+                    GROUP BY p.category
+                    ORDER BY SUM(pu.price_total) DESC
+                    """,
+                    (first_day, next_month_first_day),
+                )
+                rows = cur.fetchall()
+
+                total = sum(float(row[1]) for row in rows)
+                categories = [
+                    {"category": row[0], "amount": float(row[1])}
+                    for row in rows
+                ]
+
+                return {
+                    "month": month_str,
+                    "total": total,
+                    "categories": categories,
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in get_dashboard_categories: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
