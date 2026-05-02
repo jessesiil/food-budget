@@ -10,28 +10,160 @@
 <body>
   <header>
     <h1>Food Budget</h1>
-    <p class="subtitle">Phase 0 — wiring check</p>
   </header>
 
+  <!-- Tab bar -->
+  <nav class="tab-bar">
+    <button class="tab-button active" data-tab="log-purchase">Log Purchase</button>
+    <button class="tab-button" data-tab="pantry">Pantry</button>
+  </nav>
+
   <main>
-    <section>
-      <h2>Backend connection</h2>
-      <p class="hint">Calls <code>/api/hello</code> on the backend.</p>
-      <button id="test-backend">Test backend</button>
-      <pre id="backend-result">(not run yet)</pre>
+    <!-- Log Purchase tab -->
+    <section id="log-purchase" class="tab-content active">
+      <div id="log-purchase-error" class="error-message"></div>
+      <div id="log-purchase-success" class="success-message"></div>
+
+      <form id="purchase-form">
+        <!-- Product field -->
+        <div class="form-group">
+          <label for="purchase-product">Product</label>
+          <div class="product-select-wrapper">
+            <select id="purchase-product" required>
+              <option value="" disabled selected>— select a product —</option>
+            </select>
+            <button type="button" id="new-product-toggle" class="link-button">＋ New product</button>
+          </div>
+        </div>
+
+        <!-- Inline new product form -->
+        <div id="new-product-form-container" class="new-product-form-container hidden">
+          <fieldset class="new-product-form">
+            <legend>Add a new product</legend>
+            <div class="form-group">
+              <label for="new-product-name">Name *</label>
+              <input type="text" id="new-product-name" placeholder="e.g. Pasta" required />
+            </div>
+            <div class="form-group">
+              <label for="new-product-brand">Brand</label>
+              <input type="text" id="new-product-brand" placeholder="optional" />
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="new-product-calories">Calories/100g</label>
+                <input type="number" id="new-product-calories" min="0" step="0.1" placeholder="e.g. 300" />
+              </div>
+              <div class="form-group">
+                <label for="new-product-protein">Protein/100g</label>
+                <input type="number" id="new-product-protein" min="0" step="0.1" placeholder="e.g. 10" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="new-product-carbs">Carbs/100g</label>
+                <input type="number" id="new-product-carbs" min="0" step="0.1" placeholder="e.g. 65" />
+              </div>
+              <div class="form-group">
+                <label for="new-product-fat">Fat/100g</label>
+                <input type="number" id="new-product-fat" min="0" step="0.1" placeholder="e.g. 1" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="new-product-notes">Notes</label>
+              <textarea id="new-product-notes" placeholder="optional"></textarea>
+            </div>
+            <div class="button-group">
+              <button type="button" id="save-new-product" class="btn-primary">Save product</button>
+              <button type="button" id="cancel-new-product" class="btn-secondary">Cancel</button>
+            </div>
+            <div id="new-product-error" class="error-message"></div>
+          </fieldset>
+        </div>
+
+        <!-- Store field -->
+        <div class="form-group">
+          <label for="purchase-store">Store</label>
+          <select id="purchase-store">
+            <option value="">— no store —</option>
+          </select>
+        </div>
+
+        <!-- Date field -->
+        <div class="form-group">
+          <label for="purchase-date">Date</label>
+          <input type="date" id="purchase-date" required />
+        </div>
+
+        <!-- Quantity field -->
+        <div class="form-group">
+          <label for="purchase-quantity">Quantity (g)</label>
+          <input type="number" id="purchase-quantity" min="1" step="1" placeholder="e.g. 600" required />
+        </div>
+
+        <!-- Price field -->
+        <div class="form-group">
+          <label for="purchase-price">Total price (€)</label>
+          <input type="number" id="purchase-price" min="0.01" step="0.01" placeholder="e.g. 5.49" required />
+        </div>
+
+        <!-- Notes field -->
+        <div class="form-group">
+          <label for="purchase-notes">Notes</label>
+          <textarea id="purchase-notes" placeholder="optional notes"></textarea>
+        </div>
+
+        <button type="submit" id="purchase-submit" class="btn-primary btn-large">Log purchase</button>
+      </form>
     </section>
 
-    <section>
-      <h2>Database connection</h2>
-      <p class="hint">Calls <code>/api/test-db</code>, which reads the <code>_ping</code> table.</p>
-      <button id="test-db">Test database</button>
-      <pre id="db-result">(not run yet)</pre>
-    </section>
+    <!-- Pantry tab -->
+    <section id="pantry" class="tab-content">
+      <div id="pantry-error" class="error-message"></div>
+      <div id="pantry-success" class="success-message"></div>
 
-    <section class="config">
-      <h2>Configuration</h2>
-      <p class="hint">Backend URL: <code id="backend-url-display"></code></p>
-      <p class="hint">Edit <code>config.js</code> to point at a different backend.</p>
+      <!-- Pantry add product form -->
+      <div class="pantry-add-product">
+        <h2>Add a new product</h2>
+        <form id="pantry-product-form">
+          <div class="form-group">
+            <label for="pantry-product-name">Name *</label>
+            <input type="text" id="pantry-product-name" placeholder="e.g. Pasta" required />
+          </div>
+          <div class="form-group">
+            <label for="pantry-product-brand">Brand</label>
+            <input type="text" id="pantry-product-brand" placeholder="optional" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="pantry-product-calories">Calories/100g</label>
+              <input type="number" id="pantry-product-calories" min="0" step="0.1" placeholder="e.g. 300" />
+            </div>
+            <div class="form-group">
+              <label for="pantry-product-protein">Protein/100g</label>
+              <input type="number" id="pantry-product-protein" min="0" step="0.1" placeholder="e.g. 10" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="pantry-product-carbs">Carbs/100g</label>
+              <input type="number" id="pantry-product-carbs" min="0" step="0.1" placeholder="e.g. 65" />
+            </div>
+            <div class="form-group">
+              <label for="pantry-product-fat">Fat/100g</label>
+              <input type="number" id="pantry-product-fat" min="0" step="0.1" placeholder="e.g. 1" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="pantry-product-notes">Notes</label>
+            <textarea id="pantry-product-notes" placeholder="optional"></textarea>
+          </div>
+          <button type="submit" id="pantry-submit" class="btn-primary btn-large">Add product</button>
+        </form>
+      </div>
+
+      <!-- Product list -->
+      <h2>Products in pantry</h2>
+      <div id="pantry-products" class="pantry-products-list"></div>
     </section>
   </main>
 
