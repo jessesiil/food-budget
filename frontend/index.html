@@ -48,6 +48,25 @@
               <label for="new-product-brand">Brand</label>
               <input type="text" id="new-product-brand" placeholder="optional" />
             </div>
+            <div class="form-group">
+              <label for="new-product-category">Category</label>
+              <select id="new-product-category" required>
+                <option value="grocery">Grocery</option>
+                <option value="alcohol">Alcohol</option>
+                <option value="nicotine">Nicotine</option>
+                <option value="event">Event</option>
+                <option value="badminton">Badminton</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="form-group" id="new-product-unit-group">
+              <label for="new-product-unit">Unit <span class="field-hint">(for nutrition tracking)</span></label>
+              <select id="new-product-unit">
+                <option value="">— none —</option>
+                <option value="g">g (grams)</option>
+                <option value="mL">mL (millilitres)</option>
+              </select>
+            </div>
             <div class="form-row">
               <div class="form-group">
                 <label for="new-product-calories">Calories/100g</label>
@@ -95,9 +114,9 @@
         </div>
 
         <!-- Quantity field -->
-        <div class="form-group">
-          <label for="purchase-quantity">Quantity (g)</label>
-          <input type="number" id="purchase-quantity" min="1" step="1" placeholder="e.g. 600" required />
+        <div class="form-group" id="purchase-quantity-group">
+          <label for="purchase-quantity">Quantity (<span id="purchase-quantity-unit">g</span>)</label>
+          <input type="number" id="purchase-quantity" min="0.1" step="0.1" placeholder="e.g. 600" />
         </div>
 
         <!-- Price field -->
@@ -132,6 +151,25 @@
           <div class="form-group">
             <label for="pantry-product-brand">Brand</label>
             <input type="text" id="pantry-product-brand" placeholder="optional" />
+          </div>
+          <div class="form-group">
+            <label for="pantry-product-category">Category</label>
+            <select id="pantry-product-category" required>
+              <option value="grocery">Grocery</option>
+              <option value="alcohol">Alcohol</option>
+              <option value="nicotine">Nicotine</option>
+              <option value="event">Event</option>
+              <option value="badminton">Badminton</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group" id="pantry-product-unit-group">
+            <label for="pantry-product-unit">Unit <span class="field-hint">(for nutrition tracking)</span></label>
+            <select id="pantry-product-unit">
+              <option value="">— none —</option>
+              <option value="g">g (grams)</option>
+              <option value="mL">mL (millilitres)</option>
+            </select>
           </div>
           <div class="form-row">
             <div class="form-group">

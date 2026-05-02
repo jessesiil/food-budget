@@ -59,8 +59,12 @@ function populateProductDropdown() {
     if (product.brand) {
       option.textContent += ` (${product.brand})`;
     }
+    option.dataset.unit = product.unit || '';
     select.appendChild(option);
   });
+
+  // Trigger change event to update quantity field visibility
+  document.getElementById("purchase-product").dispatchEvent(new Event("change"));
 }
 
 function populateStoreDropdown() {
@@ -115,6 +119,21 @@ function switchTab(tabName) {
 function setupPurchaseForm() {
   const form = document.getElementById("purchase-form");
   form.addEventListener("submit", (e) => handlePurchaseSubmit(e));
+
+  // Add change listener to product dropdown to show/hide quantity field
+  document.getElementById("purchase-product").addEventListener("change", function() {
+    const selectedOption = this.options[this.selectedIndex];
+    const unit = selectedOption.dataset.unit;
+    const quantityGroup = document.getElementById("purchase-quantity-group");
+    const unitLabel = document.getElementById("purchase-quantity-unit");
+    if (unit) {
+      quantityGroup.style.display = '';
+      unitLabel.textContent = unit;
+    } else {
+      quantityGroup.style.display = 'none';
+      document.getElementById("purchase-quantity").value = '';
+    }
+  });
 }
 
 async function handlePurchaseSubmit(e) {
@@ -133,13 +152,18 @@ async function handlePurchaseSubmit(e) {
     return;
   }
 
-  const quantity = parseFloat(quantityInput.value);
-  const price = parseFloat(priceInput.value);
-
-  if (!quantity || quantity <= 0) {
-    showError("log-purchase-error", "Quantity must be greater than 0.");
-    return;
+  // Validate quantity only if the quantity field is visible
+  const quantityGroup = document.getElementById("purchase-quantity-group");
+  const quantityVisible = quantityGroup.style.display !== 'none';
+  if (quantityVisible) {
+    const quantity = parseFloat(quantityInput.value);
+    if (!quantity || quantity <= 0) {
+      showError("log-purchase-error", "Quantity must be greater than 0.");
+      return;
+    }
   }
+
+  const price = parseFloat(priceInput.value);
 
   if (!price || price <= 0) {
     showError("log-purchase-error", "Price must be greater than 0.");
@@ -156,7 +180,7 @@ async function handlePurchaseSubmit(e) {
       product_id: parseInt(productSelect.value),
       store_id: storeSelect.value ? parseInt(storeSelect.value) : null,
       date: dateInput.value,
-      quantity_g: quantity,
+      quantity: quantityInput.value ? parseFloat(quantityInput.value) : null,
       price_total: price,
       notes: notesInput.value || null
     };
@@ -222,6 +246,8 @@ async function handleSaveNewProduct() {
   const carbsInput = document.getElementById("new-product-carbs");
   const fatInput = document.getElementById("new-product-fat");
   const notesInput = document.getElementById("new-product-notes");
+  const categoryInput = document.getElementById("new-product-category");
+  const unitInput = document.getElementById("new-product-unit");
   const errorEl = document.getElementById("new-product-error");
 
   const name = nameInput.value.trim();
@@ -230,7 +256,14 @@ async function handleSaveNewProduct() {
     return;
   }
 
-  clearError("new-product-error");
+  const category = categoryInput.value;
+  const unit = unitInput.value;
+
+  if (category === 'grocery' && !unit) {
+    showError("new-product-error", "Tip: no unit set — nutrition won't be tracked for this product. You can edit this later.");
+  } else {
+    clearError("new-product-error");
+  }
 
   const saveBtn = document.getElementById("save-new-product");
   saveBtn.disabled = true;
@@ -243,7 +276,9 @@ async function handleSaveNewProduct() {
       protein_per_100g: proteinInput.value ? parseFloat(proteinInput.value) : null,
       carbs_per_100g: carbsInput.value ? parseFloat(carbsInput.value) : null,
       fat_per_100g: fatInput.value ? parseFloat(fatInput.value) : null,
-      notes: notesInput.value.trim() || null
+      notes: notesInput.value.trim() || null,
+      category: category,
+      unit: unit || null
     };
 
     const response = await fetch(`${BACKEND_URL}/api/products`, {
@@ -286,6 +321,8 @@ function clearNewProductForm() {
   document.getElementById("new-product-carbs").value = "";
   document.getElementById("new-product-fat").value = "";
   document.getElementById("new-product-notes").value = "";
+  document.getElementById("new-product-category").value = "grocery";
+  document.getElementById("new-product-unit").value = "";
   clearError("new-product-error");
 }
 
@@ -308,6 +345,8 @@ async function handlePantryProductSubmit(e) {
   const carbsInput = document.getElementById("pantry-product-carbs");
   const fatInput = document.getElementById("pantry-product-fat");
   const notesInput = document.getElementById("pantry-product-notes");
+  const categoryInput = document.getElementById("pantry-product-category");
+  const unitInput = document.getElementById("pantry-product-unit");
 
   const name = nameInput.value.trim();
   if (!name) {
@@ -315,7 +354,14 @@ async function handlePantryProductSubmit(e) {
     return;
   }
 
-  clearError("pantry-error");
+  const category = categoryInput.value;
+  const unit = unitInput.value;
+
+  if (category === 'grocery' && !unit) {
+    showError("pantry-error", "Tip: no unit set — nutrition won't be tracked for this product. You can edit this later.");
+  } else {
+    clearError("pantry-error");
+  }
 
   const submitBtn = document.getElementById("pantry-submit");
   submitBtn.disabled = true;
@@ -328,7 +374,9 @@ async function handlePantryProductSubmit(e) {
       protein_per_100g: proteinInput.value ? parseFloat(proteinInput.value) : null,
       carbs_per_100g: carbsInput.value ? parseFloat(carbsInput.value) : null,
       fat_per_100g: fatInput.value ? parseFloat(fatInput.value) : null,
-      notes: notesInput.value.trim() || null
+      notes: notesInput.value.trim() || null,
+      category: category,
+      unit: unit || null
     };
 
     const response = await fetch(`${BACKEND_URL}/api/products`, {
@@ -355,6 +403,8 @@ async function handlePantryProductSubmit(e) {
     carbsInput.value = "";
     fatInput.value = "";
     notesInput.value = "";
+    categoryInput.value = "grocery";
+    unitInput.value = "";
 
     showSuccess("pantry-success", "Product added ✓");
     loadPantryProducts();
@@ -395,6 +445,103 @@ function renderPantryProducts(productList) {
 
       if (product.brand) {
         html += `<div class="product-brand">${escapeHtml(product.brand)}</div>`;
+      }
+
+      // Category badge
+      if (product.category) {
+        html += `<div class="product-category"><span class="badge">${escapeHtml(product.category)}</span></div>`;
+      }
+
+      // Unit info
+      if (product.unit) {
+        html += `<div class="product-unit">Unit: ${escapeHtml(product.unit)}</div>`;
+      }
+
+      // Nutrition data (skip nulls)
+      const nutrition = [];
+      if (product.calories_per_100g != null) {
+        nutrition.push({ label: "Calories/100g", value: product.calories_per_100g });
+      }
+      if (product.protein_per_100g != null) {
+        nutrition.push({ label: "Protein/100g", value: product.protein_per_100g });
+      }
+      if (product.carbs_per_100g != null) {
+        nutrition.push({ label: "Carbs/100g", value: product.carbs_per_100g });
+      }
+      if (product.fat_per_100g != null) {
+        nutrition.push({ label: "Fat/100g", value: product.fat_per_100g });
+      }
+
+      if (nutrition.length > 0) {
+        html += '<div class="product-nutrition">';
+        nutrition.forEach((item) => {
+          html += `<div class="product-nutrition-item">
+            <span>${item.label}</span>
+            <span>${item.value}</span>
+          </div>`;
+        });
+        html += "</div>";
+      }
+
+      html += "</div>";
+      return html;
+    })
+    .join("");
+}
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+function showError(elementId, message) {
+  const el = document.getElementById(elementId);
+  el.textContent = message;
+  el.style.display = "block";
+}
+
+function showSuccess(elementId, message) {
+  const el = document.getElementById(elementId);
+  el.textContent = message;
+  el.style.display = "block";
+  setTimeout(() => {
+    el.style.display = "none";
+    el.textContent = "";
+  }, 3000);
+}
+
+function clearError(elementId) {
+  const el = document.getElementById(elementId);
+  el.textContent = "";
+  el.style.display = "none";
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+!productList || productList.length === 0) {
+    container.innerHTML = '<div class="product-empty">No products yet. Add one via Log Purchase.</div>';
+    return;
+  }
+
+  container.innerHTML = productList
+    .map((product) => {
+      let html = `<div class="product-card">
+        <h3>${escapeHtml(product.name)}</h3>`;
+
+      if (product.brand) {
+        html += `<div class="product-brand">${escapeHtml(product.brand)}</div>`;
+      }
+
+      // Category badge
+      if (product.category) {
+        html += `<div class="product-category"><span class="badge">${escapeHtml(product.category)}</span></div>`;
+      }
+
+      // Unit info
+      if (product.unit) {
+        html += `<div class="product-unit">Unit: ${escapeHtml(product.unit)}</div>`;
       }
 
       // Nutrition data (skip nulls)

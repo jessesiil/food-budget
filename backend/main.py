@@ -16,6 +16,7 @@ Phase 1 endpoints (product + purchase management):
 import os
 from contextlib import contextmanager
 from datetime import date
+from typing import Literal
 import logging
 
 import psycopg
@@ -84,6 +85,8 @@ class ProductIn(BaseModel):
     carbs_per_100g: float | None = Field(None, ge=0, le=100)
     fat_per_100g: float | None = Field(None, ge=0, le=100)
     notes: str | None = Field(None, max_length=1000)
+    category: Literal['grocery','alcohol','nicotine','event','badminton','other'] = 'grocery'
+    unit: Literal['g','mL'] | None = None
 
 
 class ProductOut(BaseModel):
@@ -96,6 +99,8 @@ class ProductOut(BaseModel):
     carbs_per_100g: float | None
     fat_per_100g: float | None
     notes: str | None
+    category: str
+    unit: str | None
 
 
 class PurchaseIn(BaseModel):
@@ -103,7 +108,7 @@ class PurchaseIn(BaseModel):
     product_id: int
     store_id: int | None = None
     date: date
-    quantity_g: float = Field(..., gt=0, le=100000)
+    quantity: float | None = Field(None, gt=0, le=100000)
     price_total: float = Field(..., gt=0, le=10000)
     notes: str | None = Field(None, max_length=1000)
 
@@ -114,7 +119,7 @@ class PurchaseOut(BaseModel):
     product_id: int
     store_id: int | None
     date: date
-    quantity_g: float
+    quantity: float | None
     price_total: float
     notes: str | None
     created_at: str
@@ -211,7 +216,7 @@ def get_products(request: Request):
                 cur.execute(
                     """
                     SELECT id, name, brand, calories_per_100g, protein_per_100g,
-                           carbs_per_100g, fat_per_100g, notes
+                           carbs_per_100g, fat_per_100g, notes, category, unit
                     FROM products
                     ORDER BY name ASC
                     """
@@ -227,6 +232,8 @@ def get_products(request: Request):
                         "carbs_per_100g": row[5],
                         "fat_per_100g": row[6],
                         "notes": row[7],
+                        "category": row[8],
+                        "unit": row[9],
                     }
                     for row in rows
                 ]
@@ -248,10 +255,10 @@ def create_product(request: Request, product: ProductIn):
                     """
                     INSERT INTO products
                     (name, brand, calories_per_100g, protein_per_100g,
-                     carbs_per_100g, fat_per_100g, notes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                     carbs_per_100g, fat_per_100g, notes, category, unit)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id, name, brand, calories_per_100g, protein_per_100g,
-                              carbs_per_100g, fat_per_100g, notes
+                              carbs_per_100g, fat_per_100g, notes, category, unit
                     """,
                     (
                         product.name,
@@ -261,6 +268,8 @@ def create_product(request: Request, product: ProductIn):
                         product.carbs_per_100g,
                         product.fat_per_100g,
                         product.notes,
+                        product.category,
+                        product.unit,
                     ),
                 )
                 row = cur.fetchone()
@@ -274,6 +283,8 @@ def create_product(request: Request, product: ProductIn):
                     "carbs_per_100g": row[5],
                     "fat_per_100g": row[6],
                     "notes": row[7],
+                    "category": row[8],
+                    "unit": row[9],
                 }
     except HTTPException:
         raise
@@ -304,16 +315,16 @@ def create_purchase(request: Request, purchase: PurchaseIn):
                 cur.execute(
                     """
                     INSERT INTO purchases
-                    (product_id, store_id, date, quantity_g, price_total, notes)
+                    (product_id, store_id, date, quantity, price_total, notes)
                     VALUES (%s, %s, %s, %s, %s, %s)
-                    RETURNING id, product_id, store_id, date, quantity_g,
+                    RETURNING id, product_id, store_id, date, quantity,
                               price_total, notes, created_at
                     """,
                     (
                         purchase.product_id,
                         purchase.store_id,
                         purchase.date,
-                        purchase.quantity_g,
+                        purchase.quantity,
                         purchase.price_total,
                         purchase.notes,
                     ),
@@ -325,7 +336,20 @@ def create_purchase(request: Request, purchase: PurchaseIn):
                     "product_id": row[1],
                     "store_id": row[2],
                     "date": row[3],
-                    "quantity_g": row[4],
+                    "quantity": row[4],
+                    "price_total": row[5],
+                    "notes": row[6],
+                    "created_at": row[7].isoformat() if row[7] else None,
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in create_purchase: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+,
+                    "store_id": row[2],
+                    "date": row[3],
+                    "quantity": row[4],
                     "price_total": row[5],
                     "notes": row[6],
                     "created_at": row[7].isoformat() if row[7] else None,

@@ -43,6 +43,13 @@ insert into stores (name) values
 -- Each row represents a unique product. The combination of name and brand uniquely
 -- identifies a product (e.g., "Milk" from "Campina" vs "Albert Heijn brand").
 --
+-- category: Product category (grocery, alcohol, nicotine, event, badminton, other).
+-- Defaults to 'grocery'. Used for purchasing and dietary tracking.
+--
+-- unit: Measurement unit for this product (g = grams, mL = millilitres), or null for
+-- price-only products (no quantity tracking). When unit is null, purchases of this product
+-- do not require a quantity value.
+--
 -- Nutrition data (calories, protein, carbs, fat per 100g) is nullable because:
 -- - Jesse may add a product to the database before looking up its nutrition facts.
 -- - Some products (e.g., prepared meals) may not have straightforward nutrition per 100g.
@@ -60,6 +67,10 @@ create table if not exists products (
     carbs_per_100g      numeric(5,2),
     fat_per_100g        numeric(5,2),
     notes               text,
+    category            text not null default 'grocery'
+                            check (category in ('grocery','alcohol','nicotine','event','badminton','other')),
+    unit                text
+                            check (unit in ('g','mL')),
     created_at          timestamptz not null default now()
 );
 
@@ -67,9 +78,11 @@ create table if not exists products (
 --
 -- Each row records when, where, and how much Jesse bought of a product.
 --
--- quantity_g (grams) is used rather than items because:
+-- quantity (grams or mL depending on product.unit) is nullable because:
+-- - Price-only products (unit = null) do not track quantity.
+-- - Quantity is populated only when the product has a unit set.
 -- - Different packages of the same product have different weights.
--- - Grams are a universal unit and can be cross-referenced with product nutrition.
+-- - Quantity is a universal unit and can be cross-referenced with product nutrition.
 --
 -- price_total (total euros paid) rather than per-gram:
 -- - Jesse's shopping list is built from receipt data (total cost, not unit price).
@@ -88,7 +101,7 @@ create table if not exists purchases (
     product_id  integer not null references products(id) on delete restrict,
     store_id    integer references stores(id) on delete set null,
     date        date not null default current_date,
-    quantity_g  numeric(8,2) not null,
+    quantity    numeric(8,2),
     price_total numeric(7,2) not null,
     notes       text,
     created_at  timestamptz not null default now()
