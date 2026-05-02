@@ -1,22 +1,28 @@
 """
 food-budget — FastAPI backend.
 
-Phase 0 scope: prove the wiring works.
-- /health     : liveness check (used by keep-alive pingers and hosting platforms)
-- /api/hello  : trivial endpoint to confirm the frontend can reach the backend
-- /api/test-db: reads from the _ping table to confirm the database connection works
+Phase 0 endpoints (wiring check):
+- /health         : liveness check (used by keep-alive pingers and hosting platforms)
+- /api/hello      : trivial endpoint to confirm the frontend can reach the backend
+- /api/test-db    : reads from the _ping table to confirm the database connection works
 
-Real product/purchase endpoints come in Phase 1.
+Phase 1 endpoints (product + purchase management):
+- GET  /api/stores    : list all stores
+- GET  /api/products  : list all pantry products
+- POST /api/products  : add a new product to the pantry
+- POST /api/purchases : log a purchase
 """
 
 import os
 from contextlib import contextmanager
+from datetime import date
 import logging
 
 import psycopg
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -65,6 +71,53 @@ app.add_middleware(
 )
 
 logger.info("FRONTEND_ORIGIN loaded: %s", FRONTEND_ORIGIN)
+
+
+# Pydantic models for request/response validation and serialization.
+
+class ProductIn(BaseModel):
+    """Product creation request model."""
+    name: str = Field(..., max_length=200)
+    brand: str | None = Field(None, max_length=200)
+    calories_per_100g: float | None = Field(None, ge=0)
+    protein_per_100g: float | None = Field(None, ge=0)
+    carbs_per_100g: float | None = Field(None, ge=0)
+    fat_per_100g: float | None = Field(None, ge=0)
+    notes: str | None = Field(None, max_length=1000)
+
+
+class ProductOut(BaseModel):
+    """Product response model."""
+    id: int
+    name: str
+    brand: str | None
+    calories_per_100g: float | None
+    protein_per_100g: float | None
+    carbs_per_100g: float | None
+    fat_per_100g: float | None
+    notes: str | None
+
+
+class PurchaseIn(BaseModel):
+    """Purchase creation request model."""
+    product_id: int
+    store_id: int | None = None
+    date: date
+    quantity_g: float = Field(..., gt=0)
+    price_total: float = Field(..., gt=0)
+    notes: str | None = Field(None, max_length=1000)
+
+
+class PurchaseOut(BaseModel):
+    """Purchase response model."""
+    id: int
+    product_id: int
+    store_id: int | None
+    date: date
+    quantity_g: float
+    price_total: float
+    notes: str | None
+    created_at: str
 
 
 @contextmanager
@@ -128,4 +181,133 @@ def test_db(request: Request):
             return {
                 "message": message,
                 "created_at": created_at.isoformat() if created_at else None,
+            }
+
+
+@app.get("/api/stores", response_model=list[dict])
+@limiter.limit("30/minute")
+def get_stores(request: Request):
+    """Returns all stores ordered by name."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name FROM stores ORDER BY name ASC")
+            rows = cur.fetchall()
+            return [{"id": row[0], "name": row[1]} for row in rows]
+
+
+@app.get("/api/products", response_model=list[ProductOut])
+@limiter.limit("30/minute")
+def get_products(request: Request):
+    """Returns all products ordered by name."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, name, brand, calories_per_100g, protein_per_100g,
+                       carbs_per_100g, fat_per_100g, notes
+                FROM products
+                ORDER BY name ASC
+                """
+            )
+            rows = cur.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "name": row[1],
+                    "brand": row[2],
+                    "calories_per_100g": row[3],
+                    "protein_per_100g": row[4],
+                    "carbs_per_100g": row[5],
+                    "fat_per_100g": row[6],
+                    "notes": row[7],
+                }
+                for row in rows
+            ]
+
+
+@app.post("/api/products", response_model=ProductOut, status_code=201)
+@limiter.limit("10/minute")
+def create_product(request: Request, product: ProductIn):
+    """Creates a new pantry product."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO products
+                (name, brand, calories_per_100g, protein_per_100g,
+                 carbs_per_100g, fat_per_100g, notes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, name, brand, calories_per_100g, protein_per_100g,
+                          carbs_per_100g, fat_per_100g, notes
+                """,
+                (
+                    product.name,
+                    product.brand,
+                    product.calories_per_100g,
+                    product.protein_per_100g,
+                    product.carbs_per_100g,
+                    product.fat_per_100g,
+                    product.notes,
+                ),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return {
+                "id": row[0],
+                "name": row[1],
+                "brand": row[2],
+                "calories_per_100g": row[3],
+                "protein_per_100g": row[4],
+                "carbs_per_100g": row[5],
+                "fat_per_100g": row[6],
+                "notes": row[7],
+            }
+
+
+@app.post("/api/purchases", response_model=PurchaseOut, status_code=201)
+@limiter.limit("10/minute")
+def create_purchase(request: Request, purchase: PurchaseIn):
+    """Logs a purchase."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            # Validate product exists.
+            cur.execute("SELECT id FROM products WHERE id = %s", (purchase.product_id,))
+            if cur.fetchone() is None:
+                raise HTTPException(status_code=404, detail="Product not found")
+
+            # Validate store exists if provided.
+            if purchase.store_id is not None:
+                cur.execute("SELECT id FROM stores WHERE id = %s", (purchase.store_id,))
+                if cur.fetchone() is None:
+                    raise HTTPException(status_code=404, detail="Store not found")
+
+            # Insert purchase.
+            cur.execute(
+                """
+                INSERT INTO purchases
+                (product_id, store_id, date, quantity_g, price_total, notes)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, product_id, store_id, date, quantity_g,
+                          price_total, notes, created_at
+                """,
+                (
+                    purchase.product_id,
+                    purchase.store_id,
+                    purchase.date,
+                    purchase.quantity_g,
+                    purchase.price_total,
+                    purchase.notes,
+                ),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return {
+                "id": row[0],
+                "product_id": row[1],
+                "store_id": row[2],
+                "date": row[3],
+                "quantity_g": row[4],
+                "price_total": row[5],
+                "notes": row[6],
+                "created_at": row[7].isoformat() if row[7] else None,
             }
