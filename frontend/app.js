@@ -709,7 +709,7 @@ function renderSpendChart(data) {
   const canvas = document.getElementById("dashboard-spend-canvas");
   const totalDiv = document.getElementById("dashboard-spend-total");
 
-  if (!data || data.length === 0) {
+  if (!data || !data.days || data.days.length === 0) {
     emptyDiv.style.display = "block";
     canvas.style.display = "none";
     totalDiv.style.display = "none";
@@ -731,9 +731,9 @@ function renderSpendChart(data) {
   const labels = [];
   const chartData = [];
 
-  data.forEach((item) => {
+  data.days.forEach((item) => {
     labels.push(item.date);
-    cumulative += parseFloat(item.daily_spend);
+    cumulative += parseFloat(item.amount);
     chartData.push(cumulative);
   });
 
@@ -806,7 +806,7 @@ function renderCategoriesChart(data) {
   const emptyDiv = document.getElementById("dashboard-categories-empty");
   const canvas = document.getElementById("dashboard-categories-canvas");
 
-  if (!data || data.length === 0) {
+  if (!data || !data.categories || data.categories.length === 0) {
     emptyDiv.style.display = "block";
     canvas.style.display = "none";
     if (categoryChart) {
@@ -821,8 +821,8 @@ function renderCategoriesChart(data) {
   canvas.style.display = "block";
 
   // Prepare data
-  const labels = data.map((item) => escapeHtml(item.category));
-  const chartData = data.map((item) => parseFloat(item.total_spend));
+  const labels = data.categories.map((item) => escapeHtml(item.category));
+  const chartData = data.categories.map((item) => parseFloat(item.amount));
 
   // Destroy old chart if exists
   if (categoryChart) {
