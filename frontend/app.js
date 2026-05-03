@@ -191,6 +191,12 @@ function setupPurchaseForm() {
       document.getElementById("purchase-quantity").value = "";
     }
     prefillPrice();
+    // Auto-focus next relevant field
+    if (unit) {
+      document.getElementById("purchase-quantity").focus();
+    } else {
+      document.getElementById("purchase-price").focus();
+    }
   });
 
   document.getElementById("purchase-store").addEventListener("change", prefillPrice);
@@ -340,6 +346,8 @@ async function handleSubmitCart() {
     cart = [];
     renderCart();
     showSuccess("log-purchase-success", `${count} purchase${count !== 1 ? "s" : ""} logged ✓`);
+    // Reset date to today for next trip
+    document.getElementById("purchase-date").value = new Date().toISOString().split("T")[0];
   } catch (err) {
     showError("log-purchase-error", `Error: ${err.message}`);
   } finally {
@@ -612,17 +620,18 @@ function renderPantryProducts(productList) {
 
       // Nutrition data (skip nulls)
       const nutrition = [];
+      const unitLabel = product.unit === 'mL' ? '100mL' : '100g';
       if (product.calories_per_100g != null) {
-        nutrition.push({ label: "Calories/100g", value: product.calories_per_100g });
+        nutrition.push({ label: `Calories/${unitLabel}`, value: product.calories_per_100g });
       }
       if (product.protein_per_100g != null) {
-        nutrition.push({ label: "Protein/100g", value: product.protein_per_100g });
+        nutrition.push({ label: `Protein/${unitLabel}`, value: product.protein_per_100g });
       }
       if (product.carbs_per_100g != null) {
-        nutrition.push({ label: "Carbs/100g", value: product.carbs_per_100g });
+        nutrition.push({ label: `Carbs/${unitLabel}`, value: product.carbs_per_100g });
       }
       if (product.fat_per_100g != null) {
-        nutrition.push({ label: "Fat/100g", value: product.fat_per_100g });
+        nutrition.push({ label: `Fat/${unitLabel}`, value: product.fat_per_100g });
       }
 
       if (nutrition.length > 0) {
@@ -1195,7 +1204,7 @@ function updateDashboardMonthLabel() {
   document.getElementById("dashboard-current-month").textContent = monthName;
 
   // Update chart titles
-  document.getElementById("dashboard-spend-title").textContent = `Spend — ${monthName}`;
+  document.getElementById("dashboard-spend-title").textContent = `Spending — ${monthName}`;
   document.getElementById("dashboard-categories-title").textContent = `By Category — ${monthName}`;
 }
 
