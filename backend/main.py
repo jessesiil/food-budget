@@ -26,7 +26,8 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import datetime
+from datetime import date as _Date
 from typing import Literal
 import logging
 
@@ -179,7 +180,7 @@ class PurchaseItemIn(BaseModel):
 class BatchPurchaseIn(BaseModel):
     """Batch purchase request — one store, one date, multiple items."""
     store_id: int | None = None
-    date: date
+    date: _Date
     items: list[PurchaseItemIn] = Field(..., min_length=1)
 
 
@@ -187,7 +188,7 @@ class PurchaseIn(BaseModel):
     """Purchase creation request model."""
     product_id: int
     store_id: int | None = None
-    date: date
+    date: _Date
     quantity: float | None = Field(None, gt=0, le=100000)
     price_total: float = Field(..., gt=0, le=10000)
     notes: str | None = Field(None, max_length=1000)
@@ -201,7 +202,7 @@ class PurchaseOut(BaseModel):
     store_id: int | None
     store_name: str | None
     category: str
-    date: date
+    date: _Date
     quantity: float | None
     price_total: float
     notes: str | None
@@ -212,7 +213,7 @@ class PurchaseUpdate(BaseModel):
     """Purchase update request model (all fields optional)."""
     product_id: int | None = None
     store_id: int | None = None
-    date: date | None = None
+    date: _Date | None = None
     quantity: float | None = Field(None, gt=0, le=100000)
     price_total: float | None = Field(None, gt=0, le=10000)
     notes: str | None = Field(None, max_length=1000)
