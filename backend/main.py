@@ -94,6 +94,9 @@ SORT_COLUMN_MAP = {
     "date": "pu.date",
     "price_total": "pu.price_total",
     "product_name": "p.name",
+    "store_name": "s.name",
+    "category": "p.category",
+    "quantity": "pu.quantity",
 }
 SORT_DIR_MAP = {"asc": "ASC", "desc": "DESC"}
 
