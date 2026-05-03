@@ -7,10 +7,18 @@ Phase 0 endpoints (wiring check):
 - /api/test-db    : reads from the _ping table to confirm the database connection works
 
 Phase 1 endpoints (product + purchase management):
-- GET  /api/stores    : list all stores
-- GET  /api/products  : list all pantry products
-- POST /api/products  : add a new product to the pantry
-- POST /api/purchases : log a purchase
+- GET    /api/stores              : list all stores
+- POST   /api/stores              : add a new store
+- GET    /api/products            : list all pantry products
+- POST   /api/products            : add a new product to the pantry
+- PUT    /api/products/{id}       : update a product
+- DELETE /api/products/{id}       : delete a product
+- POST   /api/purchases           : log a purchase
+- GET    /api/purchases           : list purchases (with filters)
+- PUT    /api/purchases/{id}      : update a purchase
+- DELETE /api/purchases/{id}      : delete a purchase
+- GET    /api/dashboard/spend     : daily spend totals for a month
+- GET    /api/dashboard/categories: spend by category for a month
 """
 
 import os
@@ -20,6 +28,7 @@ from typing import Literal
 import logging
 
 import psycopg
+from psycopg.errors import ForeignKeyViolation
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -111,6 +120,11 @@ def get_month_boundaries(month_str: str | None) -> tuple[str, str, str]:
 
 # Pydantic models for request/response validation and serialization.
 
+class StoreIn(BaseModel):
+    """Store creation request model."""
+    name: str = Field(..., min_length=1, max_length=100)
+
+
 class ProductIn(BaseModel):
     """Product creation request model."""
     name: str = Field(..., max_length=200)
@@ -138,6 +152,19 @@ class ProductOut(BaseModel):
     unit: str | None
 
 
+class ProductUpdate(BaseModel):
+    """Product update request model (all fields optional)."""
+    name: str | None = Field(None, max_length=200)
+    brand: str | None = Field(None, max_length=200)
+    calories_per_100g: float | None = Field(None, ge=0, le=1000)
+    protein_per_100g: float | None = Field(None, ge=0, le=100)
+    carbs_per_100g: float | None = Field(None, ge=0, le=100)
+    fat_per_100g: float | None = Field(None, ge=0, le=100)
+    notes: str | None = Field(None, max_length=1000)
+    category: Literal['grocery','alcohol','nicotine','event','badminton','other'] | None = None
+    unit: Literal['g','mL'] | None = None
+
+
 class PurchaseIn(BaseModel):
     """Purchase creation request model."""
     product_id: int
@@ -161,6 +188,16 @@ class PurchaseOut(BaseModel):
     price_total: float
     notes: str | None
     created_at: str
+
+
+class PurchaseUpdate(BaseModel):
+    """Purchase update request model (all fields optional)."""
+    product_id: int | None = None
+    store_id: int | None = None
+    date: date | None = None
+    quantity: float | None = Field(None, gt=0, le=100000)
+    price_total: float | None = Field(None, gt=0, le=10000)
+    notes: str | None = Field(None, max_length=1000)
 
 
 class DailySpendOut(BaseModel):
@@ -267,6 +304,31 @@ def get_stores(request: Request):
         raise
     except Exception as e:
         logger.error("Unexpected error in get_stores: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/stores", response_model=dict, status_code=201)
+@limiter.limit("10/minute")
+def create_store(request: Request, store: StoreIn):
+    """Creates a new store."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                # Check for duplicate name (case-insensitive)
+                cur.execute("SELECT id FROM stores WHERE lower(name) = lower(%s)", (store.name,))
+                if cur.fetchone():
+                    raise HTTPException(status_code=409, detail="A store with that name already exists.")
+                cur.execute(
+                    "INSERT INTO stores (name) VALUES (%s) RETURNING id, name",
+                    (store.name,)
+                )
+                row = cur.fetchone()
+                conn.commit()
+                return {"id": row[0], "name": row[1]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in create_store: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -598,4 +660,285 @@ def get_dashboard_categories(
         raise
     except Exception as e:
         logger.error("Unexpected error in get_dashboard_categories: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.put("/api/products/{product_id}", response_model=ProductOut)
+@limiter.limit("10/minute")
+def update_product(request: Request, product_id: int, product_update: ProductUpdate):
+    """Updates a product by id. Only updates fields that are explicitly provided."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                # Check if product exists
+                cur.execute("SELECT id FROM products WHERE id = %s", (product_id,))
+                if cur.fetchone() is None:
+                    raise HTTPException(status_code=404, detail="Product not found")
+
+                # Build UPDATE query based on fields that were provided
+                update_fields = []
+                update_values = []
+                fields_set = product_update.model_fields_set
+
+                if "name" in fields_set:
+                    update_fields.append("name = %s")
+                    update_values.append(product_update.name)
+                if "brand" in fields_set:
+                    update_fields.append("brand = %s")
+                    update_values.append(product_update.brand)
+                if "calories_per_100g" in fields_set:
+                    update_fields.append("calories_per_100g = %s")
+                    update_values.append(product_update.calories_per_100g)
+                if "protein_per_100g" in fields_set:
+                    update_fields.append("protein_per_100g = %s")
+                    update_values.append(product_update.protein_per_100g)
+                if "carbs_per_100g" in fields_set:
+                    update_fields.append("carbs_per_100g = %s")
+                    update_values.append(product_update.carbs_per_100g)
+                if "fat_per_100g" in fields_set:
+                    update_fields.append("fat_per_100g = %s")
+                    update_values.append(product_update.fat_per_100g)
+                if "notes" in fields_set:
+                    update_fields.append("notes = %s")
+                    update_values.append(product_update.notes)
+                if "category" in fields_set:
+                    update_fields.append("category = %s")
+                    update_values.append(product_update.category)
+                if "unit" in fields_set:
+                    update_fields.append("unit = %s")
+                    update_values.append(product_update.unit)
+
+                # If no fields were provided, return the existing product
+                if not update_fields:
+                    cur.execute(
+                        """
+                        SELECT id, name, brand, calories_per_100g, protein_per_100g,
+                               carbs_per_100g, fat_per_100g, notes, category, unit
+                        FROM products WHERE id = %s
+                        """,
+                        (product_id,)
+                    )
+                    row = cur.fetchone()
+                    return {
+                        "id": row[0],
+                        "name": row[1],
+                        "brand": row[2],
+                        "calories_per_100g": row[3],
+                        "protein_per_100g": row[4],
+                        "carbs_per_100g": row[5],
+                        "fat_per_100g": row[6],
+                        "notes": row[7],
+                        "category": row[8],
+                        "unit": row[9],
+                    }
+
+                # Execute UPDATE
+                update_values.append(product_id)
+                query = f"""
+                    UPDATE products
+                    SET {', '.join(update_fields)}
+                    WHERE id = %s
+                    RETURNING id, name, brand, calories_per_100g, protein_per_100g,
+                              carbs_per_100g, fat_per_100g, notes, category, unit
+                """
+                cur.execute(query, update_values)
+                row = cur.fetchone()
+                conn.commit()
+
+                return {
+                    "id": row[0],
+                    "name": row[1],
+                    "brand": row[2],
+                    "calories_per_100g": row[3],
+                    "protein_per_100g": row[4],
+                    "carbs_per_100g": row[5],
+                    "fat_per_100g": row[6],
+                    "notes": row[7],
+                    "category": row[8],
+                    "unit": row[9],
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in update_product: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.delete("/api/products/{product_id}", status_code=204)
+@limiter.limit("10/minute")
+def delete_product(request: Request, product_id: int):
+    """Deletes a product by id. Returns 409 if product has purchase history."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                # Check if product exists
+                cur.execute("SELECT id FROM products WHERE id = %s", (product_id,))
+                if cur.fetchone() is None:
+                    raise HTTPException(status_code=404, detail="Product not found")
+
+                # Try to delete the product
+                try:
+                    cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
+                    conn.commit()
+                except ForeignKeyViolation:
+                    conn.rollback()
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Cannot delete product with purchase history. Delete the purchases first."
+                    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in delete_product: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.put("/api/purchases/{purchase_id}", response_model=PurchaseOut)
+@limiter.limit("10/minute")
+def update_purchase(request: Request, purchase_id: int, purchase_update: PurchaseUpdate):
+    """Updates a purchase by id. Only updates fields that are explicitly provided."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                # Check if purchase exists
+                cur.execute("SELECT id FROM purchases WHERE id = %s", (purchase_id,))
+                if cur.fetchone() is None:
+                    raise HTTPException(status_code=404, detail="Purchase not found")
+
+                # Validate product_id if provided
+                if "product_id" in purchase_update.model_fields_set:
+                    cur.execute("SELECT id FROM products WHERE id = %s", (purchase_update.product_id,))
+                    if cur.fetchone() is None:
+                        raise HTTPException(status_code=404, detail="Product not found")
+
+                # Validate store_id if provided
+                if "store_id" in purchase_update.model_fields_set and purchase_update.store_id is not None:
+                    cur.execute("SELECT id FROM stores WHERE id = %s", (purchase_update.store_id,))
+                    if cur.fetchone() is None:
+                        raise HTTPException(status_code=404, detail="Store not found")
+
+                # Build UPDATE query based on fields that were provided
+                update_fields = []
+                update_values = []
+                fields_set = purchase_update.model_fields_set
+
+                if "product_id" in fields_set:
+                    update_fields.append("product_id = %s")
+                    update_values.append(purchase_update.product_id)
+                if "store_id" in fields_set:
+                    update_fields.append("store_id = %s")
+                    update_values.append(purchase_update.store_id)
+                if "date" in fields_set:
+                    update_fields.append("date = %s")
+                    update_values.append(purchase_update.date)
+                if "quantity" in fields_set:
+                    update_fields.append("quantity = %s")
+                    update_values.append(purchase_update.quantity)
+                if "price_total" in fields_set:
+                    update_fields.append("price_total = %s")
+                    update_values.append(purchase_update.price_total)
+                if "notes" in fields_set:
+                    update_fields.append("notes = %s")
+                    update_values.append(purchase_update.notes)
+
+                # If no fields were provided, return the existing purchase
+                if not update_fields:
+                    cur.execute(
+                        """
+                        SELECT pu.id, pu.product_id, p.name, pu.store_id, s.name,
+                               p.category, pu.date, pu.quantity, pu.price_total, pu.notes, pu.created_at
+                        FROM purchases pu
+                        JOIN products p ON p.id = pu.product_id
+                        LEFT JOIN stores s ON s.id = pu.store_id
+                        WHERE pu.id = %s
+                        """,
+                        (purchase_id,)
+                    )
+                    row = cur.fetchone()
+                    return {
+                        "id": row[0],
+                        "product_id": row[1],
+                        "product_name": row[2],
+                        "store_id": row[3],
+                        "store_name": row[4],
+                        "category": row[5],
+                        "date": row[6],
+                        "quantity": row[7],
+                        "price_total": row[8],
+                        "notes": row[9],
+                        "created_at": row[10].isoformat() if row[10] else None,
+                    }
+
+                # Execute UPDATE
+                update_values.append(purchase_id)
+                query = f"""
+                    UPDATE purchases
+                    SET {', '.join(update_fields)}
+                    WHERE id = %s
+                    RETURNING id, product_id, store_id, date, quantity, price_total, notes, created_at
+                """
+                cur.execute(query, update_values)
+                row = cur.fetchone()
+
+                # Fetch product and store details for response
+                product_id = row[1]
+                store_id = row[2]
+
+                cur.execute(
+                    "SELECT name, category FROM products WHERE id = %s",
+                    (product_id,)
+                )
+                product_row = cur.fetchone()
+                product_name = product_row[0]
+                category = product_row[1]
+
+                store_name = None
+                if store_id is not None:
+                    cur.execute(
+                        "SELECT name FROM stores WHERE id = %s",
+                        (store_id,)
+                    )
+                    store_row = cur.fetchone()
+                    store_name = store_row[0] if store_row else None
+
+                conn.commit()
+                return {
+                    "id": row[0],
+                    "product_id": product_id,
+                    "product_name": product_name,
+                    "store_id": store_id,
+                    "store_name": store_name,
+                    "category": category,
+                    "date": row[3],
+                    "quantity": row[4],
+                    "price_total": row[5],
+                    "notes": row[6],
+                    "created_at": row[7].isoformat() if row[7] else None,
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in update_purchase: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.delete("/api/purchases/{purchase_id}", status_code=204)
+@limiter.limit("10/minute")
+def delete_purchase(request: Request, purchase_id: int):
+    """Deletes a purchase by id."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                # Check if purchase exists
+                cur.execute("SELECT id FROM purchases WHERE id = %s", (purchase_id,))
+                if cur.fetchone() is None:
+                    raise HTTPException(status_code=404, detail="Purchase not found")
+
+                # Delete the purchase
+                cur.execute("DELETE FROM purchases WHERE id = %s", (purchase_id,))
+                conn.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in delete_purchase: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

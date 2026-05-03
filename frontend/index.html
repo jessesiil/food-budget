@@ -9,19 +9,32 @@
 </head>
 <body>
   <header>
+    <button id="hamburger-btn" class="hamburger-btn" aria-label="Open menu">
+      <span></span><span></span><span></span>
+    </button>
     <h1>Food Budget</h1>
   </header>
 
-  <!-- Tab bar -->
-  <nav class="tab-bar">
-    <button class="tab-button active" data-tab="log-purchase">Log Purchase</button>
-    <button class="tab-button" data-tab="pantry">Pantry</button>
-    <button class="tab-button" data-tab="dashboard">Dashboard</button>
+  <!-- Drawer overlay (tap to close) -->
+  <div id="drawer-overlay" class="drawer-overlay"></div>
+
+  <!-- Left drawer nav -->
+  <nav id="drawer" class="drawer">
+    <div class="drawer-header">
+      <span class="drawer-title">Food Budget</span>
+      <button id="drawer-close-btn" class="drawer-close-btn" aria-label="Close menu">✕</button>
+    </div>
+    <ul class="drawer-nav">
+      <li><button class="drawer-nav-item active" data-tab="dashboard">Dashboard</button></li>
+      <li><button class="drawer-nav-item" data-tab="log-purchase">Log Purchase</button></li>
+      <li><button class="drawer-nav-item" data-tab="pantry">Pantry</button></li>
+      <li><button class="drawer-nav-item" data-tab="stores">Stores</button></li>
+    </ul>
   </nav>
 
   <main>
     <!-- Log Purchase tab -->
-    <section id="log-purchase" class="tab-content active">
+    <section id="log-purchase" class="tab-content">
       <div id="log-purchase-error" class="error-message"></div>
       <div id="log-purchase-success" class="success-message"></div>
 
@@ -206,8 +219,9 @@
     </section>
 
     <!-- Dashboard tab -->
-    <section id="dashboard" class="tab-content">
+    <section id="dashboard" class="tab-content active">
       <div id="dashboard-error" class="error-message"></div>
+      <div id="dashboard-success" class="success-message"></div>
 
       <!-- Month selector -->
       <div class="dashboard-month-selector">
@@ -257,6 +271,8 @@
           <button id="dashboard-clear-filters" class="btn-secondary">Clear filters</button>
         </div>
 
+        <div id="dashboard-purchases-cards" class="purchases-cards-list"></div>
+
         <table class="dashboard-purchases-table">
           <thead>
             <tr>
@@ -266,6 +282,7 @@
               <th class="sortable" data-sort="category">Category <span class="sort-indicator"></span></th>
               <th class="sortable" data-sort="quantity">Qty <span class="sort-indicator"></span></th>
               <th class="sortable" data-sort="price_total">Price <span class="sort-indicator"></span></th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="dashboard-purchases-tbody">
@@ -275,7 +292,34 @@
         <div id="dashboard-purchases-empty" class="dashboard-empty-state">No purchases for this month</div>
       </div>
     </section>
+
+    <!-- Stores tab -->
+    <section id="stores" class="tab-content">
+      <div id="stores-error" class="error-message"></div>
+      <div id="stores-success" class="success-message"></div>
+
+      <div class="pantry-add-product">
+        <h2>Add a store</h2>
+        <form id="add-store-form">
+          <div class="form-group">
+            <label for="store-name-input">Store name *</label>
+            <input type="text" id="store-name-input" placeholder="e.g. Dirk" required />
+          </div>
+          <button type="submit" id="add-store-submit" class="btn-primary btn-large">Add store</button>
+        </form>
+      </div>
+
+      <h2>All stores</h2>
+      <div id="stores-list" class="stores-list"></div>
+    </section>
   </main>
+
+  <!-- Edit modal (shared for product and purchase edits) -->
+  <div id="edit-modal-overlay" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div id="edit-modal-content"></div>
+    </div>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="config.js"></script>

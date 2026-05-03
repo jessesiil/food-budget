@@ -3,16 +3,19 @@
 // State
 let products = [];
 let stores = [];
+let currentPurchases = [];
 
 // Initialize
 document.addEventListener("DOMContentLoaded", () => {
   initializeDateField();
   loadProductsAndStores();
-  setupTabNavigation();
+  setupDrawerNavigation();
   setupPurchaseForm();
   setupNewProductForm();
   setupPantryForm();
+  setupStoresForm();
   setupDashboard();
+  initializeDashboard();
 });
 
 // ============================================================================
@@ -84,37 +87,59 @@ function populateStoreDropdown() {
 }
 
 // ============================================================================
-// Tab Navigation
+// Tab Navigation (Drawer)
 // ============================================================================
 
-function setupTabNavigation() {
-  document.querySelectorAll(".tab-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      const tabName = button.dataset.tab;
+function setupDrawerNavigation() {
+  const hamburgerBtn = document.getElementById("hamburger-btn");
+  const drawerOverlay = document.getElementById("drawer-overlay");
+  const drawerCloseBtn = document.getElementById("drawer-close-btn");
+
+  hamburgerBtn.addEventListener("click", openDrawer);
+  drawerCloseBtn.addEventListener("click", closeDrawer);
+  drawerOverlay.addEventListener("click", closeDrawer);
+
+  document.querySelectorAll(".drawer-nav-item").forEach((item) => {
+    item.addEventListener("click", () => {
+      const tabName = item.dataset.tab;
       switchTab(tabName);
+      closeDrawer();
     });
   });
 }
 
-function switchTab(tabName) {
-  // Update button active states
-  document.querySelectorAll(".tab-button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === tabName);
-  });
+function openDrawer() {
+  document.getElementById("drawer").classList.add("open");
+  document.getElementById("drawer-overlay").classList.add("visible");
+  document.body.classList.add("drawer-open");
+}
 
+function closeDrawer() {
+  document.getElementById("drawer").classList.remove("open");
+  document.getElementById("drawer-overlay").classList.remove("visible");
+  document.body.classList.remove("drawer-open");
+}
+
+function switchTab(tabName) {
   // Update tab content visibility
   document.querySelectorAll(".tab-content").forEach((content) => {
     content.classList.toggle("active", content.id === tabName);
   });
 
-  // Load pantry data when switching to pantry tab
+  // Update drawer active state
+  document.querySelectorAll(".drawer-nav-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.tab === tabName);
+  });
+
+  // Side effects per tab
   if (tabName === "pantry") {
     loadPantryProducts();
   }
-
-  // Initialize dashboard when switching to dashboard tab
   if (tabName === "dashboard") {
     initializeDashboard();
+  }
+  if (tabName === "stores") {
+    loadStores();
   }
 }
 
@@ -507,10 +532,285 @@ function renderPantryProducts(productList) {
         html += "</div>";
       }
 
+      html += `<div class="product-card-actions">
+        <button class="btn-secondary btn-sm edit-product-btn" data-id="${product.id}">Edit</button>
+        <button class="btn-danger btn-sm delete-product-btn" data-id="${product.id}">Delete</button>
+      </div>`;
+
       html += "</div>";
       return html;
     })
     .join("");
+
+  // Add event listeners for edit and delete buttons
+  container.querySelectorAll(".edit-product-btn").forEach(btn => {
+    btn.addEventListener("click", () => openEditProductModal(btn.dataset.id));
+  });
+  container.querySelectorAll(".delete-product-btn").forEach(btn => {
+    btn.addEventListener("click", () => handleDeleteProduct(btn.dataset.id, btn.closest(".product-card")));
+  });
+}
+
+// ============================================================================
+// Stores Section
+// ============================================================================
+
+function setupStoresForm() {
+  const form = document.getElementById("add-store-form");
+  form.addEventListener("submit", handleAddStore);
+}
+
+async function handleAddStore(e) {
+  e.preventDefault();
+  clearError("stores-error");
+
+  const nameInput = document.getElementById("store-name-input");
+  const name = nameInput.value.trim();
+  if (!name) {
+    showError("stores-error", "Store name is required.");
+    return;
+  }
+
+  const submitBtn = document.getElementById("add-store-submit");
+  submitBtn.disabled = true;
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/stores`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || errorData.message || "Failed to add store");
+    }
+
+    const newStore = await response.json();
+    stores.push(newStore);
+    populateStoreDropdown();
+    nameInput.value = "";
+    showSuccess("stores-success", "Store added ✓");
+    loadStores();
+  } catch (err) {
+    showError("stores-error", `Error: ${err.message}`);
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+async function loadStores() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/stores`);
+    if (!response.ok) throw new Error("Failed to load stores");
+    const data = await response.json();
+    stores = data;
+    renderStoresList(data);
+    populateStoreDropdown();
+  } catch (err) {
+    showError("stores-error", `Error loading stores: ${err.message}`);
+  }
+}
+
+function renderStoresList(storeList) {
+  const container = document.getElementById("stores-list");
+  if (!storeList || storeList.length === 0) {
+    container.innerHTML = '<div class="product-empty">No stores yet.</div>';
+    return;
+  }
+  container.innerHTML = storeList.map(store => `
+    <div class="store-card">
+      <span class="store-name">${escapeHtml(store.name)}</span>
+    </div>
+  `).join("");
+}
+
+// ============================================================================
+// Modal Helpers
+// ============================================================================
+
+function openModal(htmlContent) {
+  document.getElementById("edit-modal-content").innerHTML = htmlContent;
+  document.getElementById("edit-modal-overlay").classList.remove("hidden");
+
+  // Close on overlay click
+  const overlay = document.getElementById("edit-modal-overlay");
+  const handler = function(e) {
+    if (e.target === this) {
+      closeModal();
+      this.removeEventListener("click", handler);
+    }
+  };
+  overlay.addEventListener("click", handler);
+}
+
+function closeModal() {
+  document.getElementById("edit-modal-overlay").classList.add("hidden");
+  document.getElementById("edit-modal-content").innerHTML = "";
+}
+
+// ============================================================================
+// Product Edit/Delete
+// ============================================================================
+
+function openEditProductModal(productId) {
+  const product = products.find(p => p.id === parseInt(productId));
+  if (!product) {
+    showError("pantry-error", "Product not found");
+    return;
+  }
+
+  const formHtml = `
+    <h2>Edit Product</h2>
+    <div id="modal-error" class="error-message"></div>
+    <form id="edit-product-form">
+      <div class="form-group">
+        <label for="edit-product-name">Name *</label>
+        <input type="text" id="edit-product-name" value="${escapeHtml(product.name)}" required />
+      </div>
+      <div class="form-group">
+        <label for="edit-product-brand">Brand</label>
+        <input type="text" id="edit-product-brand" value="${escapeHtml(product.brand || '')}" />
+      </div>
+      <div class="form-group">
+        <label for="edit-product-category">Category</label>
+        <select id="edit-product-category" required>
+          <option value="grocery" ${product.category === 'grocery' ? 'selected' : ''}>Grocery</option>
+          <option value="alcohol" ${product.category === 'alcohol' ? 'selected' : ''}>Alcohol</option>
+          <option value="nicotine" ${product.category === 'nicotine' ? 'selected' : ''}>Nicotine</option>
+          <option value="event" ${product.category === 'event' ? 'selected' : ''}>Event</option>
+          <option value="badminton" ${product.category === 'badminton' ? 'selected' : ''}>Badminton</option>
+          <option value="other" ${product.category === 'other' ? 'selected' : ''}>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="edit-product-unit">Unit</label>
+        <select id="edit-product-unit">
+          <option value="" ${!product.unit ? 'selected' : ''}>— none —</option>
+          <option value="g" ${product.unit === 'g' ? 'selected' : ''}>g (grams)</option>
+          <option value="mL" ${product.unit === 'mL' ? 'selected' : ''}>mL (millilitres)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="edit-product-calories">Calories/100g</label>
+          <input type="number" id="edit-product-calories" min="0" step="0.1" value="${product.calories_per_100g || ''}" />
+        </div>
+        <div class="form-group">
+          <label for="edit-product-protein">Protein/100g</label>
+          <input type="number" id="edit-product-protein" min="0" step="0.1" value="${product.protein_per_100g || ''}" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="edit-product-carbs">Carbs/100g</label>
+          <input type="number" id="edit-product-carbs" min="0" step="0.1" value="${product.carbs_per_100g || ''}" />
+        </div>
+        <div class="form-group">
+          <label for="edit-product-fat">Fat/100g</label>
+          <input type="number" id="edit-product-fat" min="0" step="0.1" value="${product.fat_per_100g || ''}" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="edit-product-notes">Notes</label>
+        <textarea id="edit-product-notes">${escapeHtml(product.notes || '')}</textarea>
+      </div>
+      <div class="button-group">
+        <button type="submit" class="btn-primary">Save</button>
+        <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+      </div>
+    </form>
+  `;
+
+  openModal(formHtml);
+
+  document.getElementById("edit-product-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearError("modal-error");
+
+    const name = document.getElementById("edit-product-name").value.trim();
+    if (!name) {
+      showError("modal-error", "Product name is required.");
+      return;
+    }
+
+    const submitBtn = document.querySelector("#edit-product-form button[type='submit']");
+    submitBtn.disabled = true;
+
+    try {
+      const payload = {
+        name,
+        brand: document.getElementById("edit-product-brand").value.trim() || null,
+        calories_per_100g: document.getElementById("edit-product-calories").value ? parseFloat(document.getElementById("edit-product-calories").value) : null,
+        protein_per_100g: document.getElementById("edit-product-protein").value ? parseFloat(document.getElementById("edit-product-protein").value) : null,
+        carbs_per_100g: document.getElementById("edit-product-carbs").value ? parseFloat(document.getElementById("edit-product-carbs").value) : null,
+        fat_per_100g: document.getElementById("edit-product-fat").value ? parseFloat(document.getElementById("edit-product-fat").value) : null,
+        notes: document.getElementById("edit-product-notes").value.trim() || null,
+        category: document.getElementById("edit-product-category").value,
+        unit: document.getElementById("edit-product-unit").value || null
+      };
+
+      const response = await fetch(`${BACKEND_URL}/api/products/${productId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.detail || errorData.message || "Failed to update product";
+        throw new Error(errorMsg);
+      }
+
+      const updatedProduct = await response.json();
+
+      // Update products array
+      const index = products.findIndex(p => p.id === updatedProduct.id);
+      if (index !== -1) {
+        products[index] = updatedProduct;
+      }
+
+      closeModal();
+      loadPantryProducts();
+      showSuccess("pantry-success", "Product updated ✓");
+    } catch (err) {
+      showError("modal-error", `Error: ${err.message}`);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+async function handleDeleteProduct(productId, cardElement) {
+  if (!confirm("Delete this product? This cannot be undone.")) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/products/${productId}`, {
+      method: "DELETE"
+    });
+
+    if (response.status === 204) {
+      // Success
+      products = products.filter(p => p.id !== parseInt(productId));
+      loadPantryProducts();
+      loadProductsAndStores();
+      showSuccess("pantry-success", "Product deleted ✓");
+    } else {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMsg = errorData.detail || errorData.message || "Failed to delete product";
+
+      if (response.status === 409) {
+        // Product has purchase history
+        showError("pantry-error", errorMsg);
+      } else {
+        showError("pantry-error", `Error: ${errorMsg}`);
+      }
+    }
+  } catch (err) {
+    showError("pantry-error", `Error: ${err.message}`);
+  }
 }
 
 // ============================================================================
@@ -542,7 +842,150 @@ function clearError(elementId) {
 function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
-  return div.innerHTML;
+  return div.innerHTML.replace(/"/g, "&quot;");
+}
+
+// ============================================================================
+// Purchase Edit/Delete
+// ============================================================================
+
+function openEditPurchaseModal(purchaseId) {
+  const purchase = currentPurchases.find(p => p.id === parseInt(purchaseId));
+  if (!purchase) {
+    showError("dashboard-error", "Purchase not found");
+    return;
+  }
+
+  // Build product options
+  const productOptions = products
+    .map(p => `<option value="${p.id}" ${p.id === purchase.product_id ? 'selected' : ''}>${escapeHtml(p.name)}${p.brand ? ' (' + escapeHtml(p.brand) + ')' : ''}</option>`)
+    .join("");
+
+  // Build store options
+  const storeOptions = `<option value="" ${!purchase.store_id ? 'selected' : ''}>— no store —</option>` +
+    stores.map(s => `<option value="${s.id}" ${s.id === purchase.store_id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join("");
+
+  const formHtml = `
+    <h2>Edit Purchase</h2>
+    <div id="modal-error" class="error-message"></div>
+    <form id="edit-purchase-form">
+      <div class="form-group">
+        <label for="edit-purchase-product">Product *</label>
+        <select id="edit-purchase-product" required>
+          ${productOptions}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="edit-purchase-store">Store</label>
+        <select id="edit-purchase-store">
+          ${storeOptions}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="edit-purchase-date">Date *</label>
+        <input type="date" id="edit-purchase-date" value="${purchase.date}" required />
+      </div>
+      <div class="form-group">
+        <label for="edit-purchase-quantity">Quantity</label>
+        <input type="number" id="edit-purchase-quantity" min="0.1" step="0.1" value="${purchase.quantity || ''}" />
+      </div>
+      <div class="form-group">
+        <label for="edit-purchase-price">Total price (€) *</label>
+        <input type="number" id="edit-purchase-price" min="0.01" step="0.01" value="${purchase.price_total}" required />
+      </div>
+      <div class="form-group">
+        <label for="edit-purchase-notes">Notes</label>
+        <textarea id="edit-purchase-notes">${escapeHtml(purchase.notes || '')}</textarea>
+      </div>
+      <div class="button-group">
+        <button type="submit" class="btn-primary">Save</button>
+        <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+      </div>
+    </form>
+  `;
+
+  openModal(formHtml);
+
+  document.getElementById("edit-purchase-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearError("modal-error");
+
+    const productSelect = document.getElementById("edit-purchase-product");
+    const storeSelect = document.getElementById("edit-purchase-store");
+    const dateInput = document.getElementById("edit-purchase-date");
+    const quantityInput = document.getElementById("edit-purchase-quantity");
+    const priceInput = document.getElementById("edit-purchase-price");
+    const notesInput = document.getElementById("edit-purchase-notes");
+
+    if (!productSelect.value) {
+      showError("modal-error", "Please select a product.");
+      return;
+    }
+
+    const price = parseFloat(priceInput.value);
+    if (!price || price <= 0) {
+      showError("modal-error", "Price must be greater than 0.");
+      return;
+    }
+
+    const submitBtn = document.querySelector("#edit-purchase-form button[type='submit']");
+    submitBtn.disabled = true;
+
+    try {
+      const payload = {
+        product_id: parseInt(productSelect.value),
+        store_id: storeSelect.value ? parseInt(storeSelect.value) : null,
+        date: dateInput.value,
+        quantity: quantityInput.value ? parseFloat(quantityInput.value) : null,
+        price_total: price,
+        notes: notesInput.value || null
+      };
+
+      const response = await fetch(`${BACKEND_URL}/api/purchases/${purchaseId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.detail || errorData.message || "Failed to update purchase";
+        throw new Error(errorMsg);
+      }
+
+      closeModal();
+      loadDashboardPurchases();
+      showSuccess("dashboard-success", "Purchase updated ✓");
+    } catch (err) {
+      showError("modal-error", `Error: ${err.message}`);
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+async function handleDeletePurchase(purchaseId) {
+  if (!confirm("Delete this purchase?")) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/purchases/${purchaseId}`, {
+      method: "DELETE"
+    });
+
+    if (response.status === 204) {
+      // Success
+      loadDashboardPurchases();
+      showSuccess("dashboard-success", "Purchase deleted ✓");
+    } else {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMsg = errorData.detail || errorData.message || "Failed to delete purchase";
+      showError("dashboard-error", `Error: ${errorMsg}`);
+    }
+  } catch (err) {
+    showError("dashboard-error", `Error: ${err.message}`);
+  }
 }
 
 // ============================================================================
@@ -896,16 +1339,22 @@ async function loadDashboardPurchases() {
 
 function renderDashboardPurchases(purchaseList) {
   const tbody = document.getElementById("dashboard-purchases-tbody");
+  const cardsContainer = document.getElementById("dashboard-purchases-cards");
   const emptyState = document.getElementById("dashboard-purchases-empty");
+
+  // Store purchases in global variable for modal lookups
+  currentPurchases = purchaseList;
 
   if (!purchaseList || purchaseList.length === 0) {
     tbody.innerHTML = "";
+    cardsContainer.innerHTML = "";
     emptyState.style.display = "block";
     return;
   }
 
   emptyState.style.display = "none";
 
+  // Render table rows (desktop)
   tbody.innerHTML = purchaseList
     .map((purchase) => {
       const date = new Date(purchase.date).toLocaleDateString("en-GB");
@@ -922,9 +1371,48 @@ function renderDashboardPurchases(purchaseList) {
         <td>${category}</td>
         <td>${qty}</td>
         <td>€${price}</td>
+        <td>
+          <button class="btn-secondary btn-sm edit-purchase-btn" data-id="${purchase.id}">Edit</button>
+          <button class="btn-danger btn-sm delete-purchase-btn" data-id="${purchase.id}">Delete</button>
+        </td>
       </tr>`;
     })
     .join("");
+
+  // Render cards (mobile)
+  cardsContainer.innerHTML = purchaseList
+    .map((purchase) => {
+      const dateObj = new Date(purchase.date);
+      const shortDate = dateObj.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      const product = escapeHtml(purchase.product_name);
+      const store = purchase.store_name ? escapeHtml(purchase.store_name) : null;
+      const price = parseFloat(purchase.price_total).toFixed(2);
+      const category = purchase.category;
+
+      return `<div class="purchase-card purchase-card--${category}" data-id="${purchase.id}">
+        <div class="purchase-card-top">
+          <span class="purchase-card-date">${shortDate}</span>
+          <span class="purchase-card-price">€${price}</span>
+        </div>
+        <div class="purchase-card-product">${product}</div>
+        ${store ? `<div class="purchase-card-store">${store}</div>` : ''}
+        <div class="purchase-card-actions">
+          <button class="btn-secondary btn-sm edit-purchase-btn" data-id="${purchase.id}">Edit</button>
+          <button class="btn-danger btn-sm delete-purchase-btn" data-id="${purchase.id}">Delete</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+
+  // Add event listeners — both table and cards
+  [tbody, cardsContainer].forEach(container => {
+    container.querySelectorAll(".edit-purchase-btn").forEach(btn => {
+      btn.addEventListener("click", () => openEditPurchaseModal(btn.dataset.id));
+    });
+    container.querySelectorAll(".delete-purchase-btn").forEach(btn => {
+      btn.addEventListener("click", () => handleDeletePurchase(btn.dataset.id));
+    });
+  });
 }
 
 function populateDashboardFilters(purchaseList) {

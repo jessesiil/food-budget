@@ -9,48 +9,161 @@ body {
   line-height: 1.5;
 }
 
+/* Hamburger button */
 header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   background: #2563eb;
   color: white;
-  padding: 16px;
-  text-align: center;
+  padding: 14px 16px;
   border-bottom: 1px solid #1d4ed8;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 header h1 {
   margin: 0;
-  font-size: 1.5rem;
-}
-
-/* Tab bar */
-.tab-bar {
-  display: flex;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
-  gap: 0;
-}
-
-.tab-button {
+  font-size: 1.4rem;
   flex: 1;
-  padding: 12px 16px;
-  background: white;
-  color: #666;
+}
+
+.hamburger-btn {
+  background: none;
   border: none;
-  border-bottom: 3px solid transparent;
-  font-size: 0.95rem;
-  font-weight: 500;
   cursor: pointer;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.hamburger-btn span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: white;
+  border-radius: 2px;
   transition: all 0.2s;
 }
 
-.tab-button:active {
-  transform: none;
-  background: #f5f5f5;
+.hamburger-btn:active span {
+  background: rgba(255,255,255,0.7);
 }
 
-.tab-button.active {
+/* Drawer overlay */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+
+.drawer-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Left drawer */
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 260px;
+  background: white;
+  z-index: 300;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+}
+
+.drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: #2563eb;
+  color: white;
+}
+
+.drawer-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.drawer-close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.drawer-close-btn:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+.drawer-nav {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  flex: 1;
+}
+
+.drawer-nav li {
+  margin: 0;
+}
+
+.drawer-nav-item {
+  display: block;
+  width: 100%;
+  padding: 14px 20px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.drawer-nav-item:hover {
+  background: #f0f6ff;
   color: #2563eb;
-  border-bottom-color: #2563eb;
+}
+
+.drawer-nav-item:active {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.drawer-nav-item.active {
+  background: #eff6ff;
+  color: #2563eb;
+  border-left-color: #2563eb;
+  font-weight: 600;
+}
+
+/* Prevent body scroll when drawer is open */
+body.drawer-open {
+  overflow: hidden;
 }
 
 /* Main content */
@@ -58,7 +171,7 @@ main {
   max-width: 600px;
   margin: 0 auto;
   padding: 16px;
-  padding-bottom: 64px;
+  padding-bottom: 32px;
 }
 
 .tab-content {
@@ -239,6 +352,43 @@ textarea {
   transform: translateY(1px);
 }
 
+.btn-secondary:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
+.btn-danger:active {
+  transform: translateY(1px);
+}
+
+.btn-danger:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+}
+
 .btn-large {
   width: 100%;
   padding: 14px 16px;
@@ -307,6 +457,12 @@ textarea {
   font-size: 1.05rem;
 }
 
+.product-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .product-brand {
   color: #666;
   font-size: 0.9rem;
@@ -341,6 +497,116 @@ h2 {
   font-size: 1.1rem;
 }
 
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-container {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Purchase cards (mobile) */
+.purchases-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.purchase-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  border-left: 4px solid #6b7280; /* default: other/grey */
+}
+
+/* Category colors — left border */
+.purchase-card--grocery    { border-left-color: #16a34a; }
+.purchase-card--alcohol    { border-left-color: #7c3aed; }
+.purchase-card--nicotine   { border-left-color: #d97706; }
+.purchase-card--event      { border-left-color: #2563eb; }
+.purchase-card--badminton  { border-left-color: #0891b2; }
+.purchase-card--other      { border-left-color: #6b7280; }
+
+.purchase-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.purchase-card-date {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.purchase-card-price {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.purchase-card-product {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #1a1a1a;
+  margin-bottom: 2px;
+}
+
+.purchase-card-store {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.purchase-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Stores list */
+.stores-list {
+  display: grid;
+  gap: 10px;
+}
+
+.store-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+}
+
+.store-name {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
 /* Mobile-first responsive */
 @media (min-width: 480px) {
   main {
@@ -354,12 +620,7 @@ h2 {
 
 @media (max-width: 390px) {
   header h1 {
-    font-size: 1.3rem;
-  }
-
-  .tab-button {
-    padding: 10px 12px;
-    font-size: 0.85rem;
+    font-size: 1.2rem;
   }
 
   .btn-primary,
@@ -367,6 +628,26 @@ h2 {
   .link-button {
     padding: 10px 12px;
     font-size: 0.9rem;
+  }
+}
+
+/* On mobile: show cards, hide table */
+@media (max-width: 767px) {
+  .purchases-cards-list {
+    display: flex;
+  }
+  .dashboard-purchases-table {
+    display: none;
+  }
+}
+
+/* On desktop: show table, hide cards */
+@media (min-width: 768px) {
+  .purchases-cards-list {
+    display: none;
+  }
+  .dashboard-purchases-table {
+    display: table;
   }
 }
 
