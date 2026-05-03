@@ -573,7 +573,7 @@ function renderPantryProducts(productList) {
 
       // Category badge
       if (product.category) {
-        html += `<div class="product-category"><span class="badge">${escapeHtml(product.category)}</span></div>`;
+        html += `<div class="product-category"><span class="badge">${escapeHtml(capitalize(product.category))}</span></div>`;
       }
 
       // Unit info
@@ -918,6 +918,11 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML.replace(/"/g, "&quot;");
+}
+
+function capitalize(str) {
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 // ============================================================================
@@ -1339,7 +1344,7 @@ function renderCategoriesChart(data) {
   canvas.style.display = "block";
 
   // Prepare data
-  const labels = data.categories.map((item) => escapeHtml(item.category));
+  const labels = data.categories.map((item) => escapeHtml(capitalize(item.category)));
   const chartData = data.categories.map((item) => parseFloat(item.amount));
 
   // Destroy old chart if exists
@@ -1435,7 +1440,7 @@ function renderDashboardPurchases(purchaseList) {
       const date = new Date(purchase.date).toLocaleDateString("en-GB");
       const product = escapeHtml(purchase.product_name);
       const store = purchase.store_name ? escapeHtml(purchase.store_name) : "—";
-      const category = escapeHtml(purchase.category);
+      const category = escapeHtml(capitalize(purchase.category));
       const qty = purchase.quantity ? parseFloat(purchase.quantity).toFixed(2) : "—";
       const price = parseFloat(purchase.price_total).toFixed(2);
 
@@ -1505,7 +1510,7 @@ function populateDashboardFilters(purchaseList) {
     .forEach((cat) => {
       const option = document.createElement("option");
       option.value = cat;
-      option.textContent = cat;
+      option.textContent = capitalize(cat);
       categorySelect.appendChild(option);
     });
   categorySelect.value = currentValue;

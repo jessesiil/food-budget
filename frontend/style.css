@@ -880,6 +880,7 @@ h2 {
 #dashboard-categories-canvas {
   max-width: 100%;
   height: auto;
+  min-height: 260px;
 }
 
 .dashboard-total {
@@ -1000,6 +1001,11 @@ h2 {
 
 /* Responsive: laptop view (>= 768px) */
 @media (min-width: 768px) {
+  main {
+    max-width: 1000px;
+    padding: 24px 32px;
+  }
+
   /* Hide mobile dashboard tabs on laptop */
   .dashboard-tabs {
     display: none;
