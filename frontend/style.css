@@ -550,6 +550,143 @@ h2 {
 .purchase-card--badminton  { border-left-color: #0891b2; }
 .purchase-card--other      { border-left-color: #6b7280; }
 
+/* Trip card (grouped purchases for mobile) */
+.trip-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.trip-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s;
+}
+
+.trip-card-header:hover {
+  background-color: #fafafa;
+}
+
+.trip-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #1a1a1a;
+  min-width: 0;
+}
+
+.trip-store-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trip-divider {
+  color: #999;
+  flex-shrink: 0;
+}
+
+.trip-date {
+  color: #666;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.trip-card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.trip-total {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+}
+
+.trip-chevron {
+  font-size: 1.2rem;
+  color: #999;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.trip-card.expanded .trip-chevron {
+  transform: rotate(90deg);
+}
+
+.trip-card-summary {
+  padding: 0 14px 8px 14px;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.trip-card-items {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 14px 12px 14px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.trip-card.expanded .trip-card-items {
+  display: flex;
+}
+
+.trip-item-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.trip-item-row:last-child {
+  border-bottom: none;
+}
+
+.trip-item-product {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.trip-item-qty {
+  color: #666;
+  font-size: 0.85rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.trip-item-price {
+  color: #1a1a1a;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+  min-width: 50px;
+}
+
+.trip-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .purchase-card-top {
   display: flex;
   justify-content: space-between;
