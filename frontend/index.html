@@ -122,6 +122,11 @@
               <label for="new-product-notes">Notes</label>
               <textarea id="new-product-notes" placeholder="optional"></textarea>
             </div>
+            <div class="form-group preset-section hidden" id="new-product-preset-section">
+              <label>Quantity Presets <span class="field-hint">(tap to fill quantity field)</span></label>
+              <div id="new-product-preset-rows"></div>
+              <button type="button" id="new-product-add-preset-btn" class="link-button">＋ Add preset</button>
+            </div>
             <div class="button-group">
               <button type="button" id="save-new-product" class="btn-primary">Save product</button>
               <button type="button" id="cancel-new-product" class="btn-secondary">Cancel</button>
@@ -134,6 +139,8 @@
           <label for="purchase-quantity">Quantity (<span id="purchase-quantity-unit">g</span>)</label>
           <input type="number" id="purchase-quantity" min="0.1" step="0.1" placeholder="e.g. 600" />
         </div>
+
+        <div id="purchase-preset-buttons" class="preset-buttons-container"></div>
 
         <div class="form-group">
           <label for="purchase-price">Total price (€)</label>
@@ -218,6 +225,11 @@
           <div class="form-group">
             <label for="pantry-product-notes">Notes</label>
             <textarea id="pantry-product-notes" placeholder="optional"></textarea>
+          </div>
+          <div class="form-group preset-section hidden" id="pantry-preset-section">
+            <label>Quantity Presets <span class="field-hint">(tap to fill quantity field)</span></label>
+            <div id="pantry-preset-rows"></div>
+            <button type="button" id="pantry-add-preset-btn" class="link-button">＋ Add preset</button>
           </div>
           <button type="submit" id="pantry-submit" class="btn-primary btn-large">Add product</button>
         </form>

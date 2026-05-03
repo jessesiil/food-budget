@@ -999,6 +999,38 @@ h2 {
   background: #fafafa;
 }
 
+/* Preset rows in add/edit forms */
+.preset-section { margin-top: 4px; }
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.preset-row .preset-qty-input {
+  width: 100px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.preset-label-preview {
+  font-size: 0.85rem;
+  color: var(--text-muted, #6b7280);
+  min-width: 48px;
+}
+.preset-remove-btn { flex-shrink: 0; }
+
+/* Preset fill buttons in Log Purchase */
+.preset-buttons-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+.preset-fill-btn { font-size: 0.85rem; }
+
 /* Responsive: laptop view (>= 768px) */
 @media (min-width: 768px) {
   main {

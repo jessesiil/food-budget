@@ -106,3 +106,9 @@ create table if not exists purchases (
     notes       text,
     created_at  timestamptz not null default now()
 );
+
+-- T-016: Quantity presets for products
+-- Stores an array of preset quantities (with labels) for quick filling in the purchase form.
+-- Format: [{"quantity": number, "label": string}, ...]
+-- Max 4 entries. Validation enforced in backend.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS presets JSONB NOT NULL DEFAULT '[]';

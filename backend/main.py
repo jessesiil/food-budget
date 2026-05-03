@@ -1,5 +1,5 @@
 """
-food-budget — FastAPI backend.
+food-budget - FastAPI backend.
 
 Phase 0 endpoints (wiring check):
 - /health         : liveness check (used by keep-alive pingers and hosting platforms)
@@ -26,6 +26,7 @@ Phase 1 endpoints (product + purchase management):
 from __future__ import annotations
 
 import os
+import json
 from contextlib import contextmanager
 from datetime import datetime
 from datetime import date as _Date
@@ -130,6 +131,12 @@ class StoreIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
 
 
+class PresetModel(BaseModel):
+    """A single quantity preset for a product."""
+    quantity: float = Field(..., gt=0, le=100000)
+    label: str = Field(..., max_length=50)
+
+
 class ProductIn(BaseModel):
     """Product creation request model."""
     name: str = Field(..., max_length=200)
@@ -141,6 +148,7 @@ class ProductIn(BaseModel):
     notes: str | None = Field(None, max_length=1000)
     category: Literal['grocery','alcohol','nicotine','event','badminton','other'] = 'grocery'
     unit: Literal['g','mL'] | None = None
+    presets: list[PresetModel] = Field(default_factory=list, max_length=4)
 
 
 class ProductOut(BaseModel):
@@ -155,6 +163,7 @@ class ProductOut(BaseModel):
     notes: str | None
     category: str
     unit: str | None
+    presets: list[PresetModel] = []
 
 
 class ProductUpdate(BaseModel):
@@ -168,6 +177,7 @@ class ProductUpdate(BaseModel):
     notes: str | None = Field(None, max_length=1000)
     category: Literal['grocery','alcohol','nicotine','event','badminton','other'] | None = None
     unit: Literal['g','mL'] | None = None
+    presets: list[PresetModel] | None = Field(None, max_length=4)
 
 
 class PurchaseItemIn(BaseModel):
@@ -179,7 +189,7 @@ class PurchaseItemIn(BaseModel):
 
 
 class BatchPurchaseIn(BaseModel):
-    """Batch purchase request — one store, one date, multiple items."""
+    """Batch purchase request - one store, one date, multiple items."""
     store_id: int | None = None
     date: _Date
     items: list[PurchaseItemIn] = Field(..., min_length=1)
@@ -362,7 +372,7 @@ def get_products(request: Request):
                 cur.execute(
                     """
                     SELECT id, name, brand, calories_per_100g, protein_per_100g,
-                           carbs_per_100g, fat_per_100g, notes, category, unit
+                           carbs_per_100g, fat_per_100g, notes, category, unit, presets
                     FROM products
                     ORDER BY name ASC
                     """
@@ -380,6 +390,7 @@ def get_products(request: Request):
                         "notes": row[7],
                         "category": row[8],
                         "unit": row[9],
+                        "presets": row[10] if row[10] else [],
                     }
                     for row in rows
                 ]
@@ -401,10 +412,10 @@ def create_product(request: Request, product: ProductIn):
                     """
                     INSERT INTO products
                     (name, brand, calories_per_100g, protein_per_100g,
-                     carbs_per_100g, fat_per_100g, notes, category, unit)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     carbs_per_100g, fat_per_100g, notes, category, unit, presets)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id, name, brand, calories_per_100g, protein_per_100g,
-                              carbs_per_100g, fat_per_100g, notes, category, unit
+                              carbs_per_100g, fat_per_100g, notes, category, unit, presets
                     """,
                     (
                         product.name,
@@ -416,6 +427,7 @@ def create_product(request: Request, product: ProductIn):
                         product.notes,
                         product.category,
                         product.unit,
+                        json.dumps([p.model_dump() for p in product.presets]),
                     ),
                 )
                 row = cur.fetchone()
@@ -431,6 +443,7 @@ def create_product(request: Request, product: ProductIn):
                     "notes": row[7],
                     "category": row[8],
                     "unit": row[9],
+                    "presets": row[10] if row[10] else [],
                 }
     except HTTPException:
         raise
@@ -822,13 +835,17 @@ def update_product(request: Request, product_id: int, product_update: ProductUpd
                 if "unit" in fields_set:
                     update_fields.append("unit = %s")
                     update_values.append(product_update.unit)
+                if "presets" in fields_set:
+                    preset_value = product_update.presets or []
+                    update_fields.append("presets = %s")
+                    update_values.append(json.dumps([p.model_dump() for p in preset_value]))
 
                 # If no fields were provided, return the existing product
                 if not update_fields:
                     cur.execute(
                         """
                         SELECT id, name, brand, calories_per_100g, protein_per_100g,
-                               carbs_per_100g, fat_per_100g, notes, category, unit
+                               carbs_per_100g, fat_per_100g, notes, category, unit, presets
                         FROM products WHERE id = %s
                         """,
                         (product_id,)
@@ -845,6 +862,7 @@ def update_product(request: Request, product_id: int, product_update: ProductUpd
                         "notes": row[7],
                         "category": row[8],
                         "unit": row[9],
+                        "presets": row[10] if row[10] else [],
                     }
 
                 # Execute UPDATE
@@ -854,7 +872,7 @@ def update_product(request: Request, product_id: int, product_update: ProductUpd
                     SET {', '.join(update_fields)}
                     WHERE id = %s
                     RETURNING id, name, brand, calories_per_100g, protein_per_100g,
-                              carbs_per_100g, fat_per_100g, notes, category, unit
+                              carbs_per_100g, fat_per_100g, notes, category, unit, presets
                 """
                 cur.execute(query, update_values)
                 row = cur.fetchone()
@@ -871,6 +889,7 @@ def update_product(request: Request, product_id: int, product_update: ProductUpd
                     "notes": row[7],
                     "category": row[8],
                     "unit": row[9],
+                    "presets": row[10] if row[10] else [],
                 }
     except HTTPException:
         raise

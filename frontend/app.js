@@ -191,6 +191,7 @@ function setupPurchaseForm() {
       document.getElementById("purchase-quantity").value = "";
     }
     prefillPrice();
+    renderPresetButtons();
     // Auto-focus next relevant field
     if (unit) {
       document.getElementById("purchase-quantity").focus();
@@ -345,6 +346,7 @@ async function handleSubmitCart() {
     const count = cart.length;
     cart = [];
     renderCart();
+    document.getElementById('purchase-preset-buttons').innerHTML = '';
     showSuccess("log-purchase-success", `${count} purchase${count !== 1 ? "s" : ""} logged ✓`);
     // Reset date to today for next trip
     document.getElementById("purchase-date").value = new Date().toISOString().split("T")[0];
@@ -381,10 +383,30 @@ function setupNewProductForm() {
     clearNewProductForm();
   });
 
-  // Clear the grocery/unit warning immediately when the user picks a unit
+  // Handle unit change — show/hide preset section
   document.getElementById("new-product-unit").addEventListener("change", function() {
+    const presetSection = document.getElementById("new-product-preset-section");
+    const presetRowsContainer = document.getElementById("new-product-preset-rows");
     if (this.value) {
+      presetSection.classList.remove("hidden");
       clearError("new-product-error");
+    } else {
+      presetSection.classList.add("hidden");
+      presetRowsContainer.innerHTML = "";
+    }
+  });
+
+  // Handle preset add button
+  document.getElementById("new-product-add-preset-btn").addEventListener("click", (e) => {
+    e.preventDefault();
+    const presetRowsContainer = document.getElementById("new-product-preset-rows");
+    const unit = document.getElementById("new-product-unit").value;
+    if (presetRowsContainer.querySelectorAll(".preset-row").length < 4) {
+      const newRow = document.createElement("div");
+      newRow.innerHTML = buildPresetRowHtml("", unit, presetRowsContainer.querySelectorAll(".preset-row").length);
+      presetRowsContainer.appendChild(newRow.firstElementChild);
+      attachPresetRowListeners(presetRowsContainer, unit);
+      updatePresetAddBtn(presetRowsContainer);
     }
   });
 }
@@ -399,6 +421,7 @@ async function handleSaveNewProduct() {
   const notesInput = document.getElementById("new-product-notes");
   const categoryInput = document.getElementById("new-product-category");
   const unitInput = document.getElementById("new-product-unit");
+  const presetRowsContainer = document.getElementById("new-product-preset-rows");
   const errorEl = document.getElementById("new-product-error");
 
   clearError("new-product-error");
@@ -422,6 +445,7 @@ async function handleSaveNewProduct() {
   saveBtn.disabled = true;
 
   try {
+    const presets = collectPresets(presetRowsContainer, unit);
     const payload = {
       name,
       brand: brandInput.value.trim() || null,
@@ -431,7 +455,8 @@ async function handleSaveNewProduct() {
       fat_per_100g: fatInput.value ? parseFloat(fatInput.value) : null,
       notes: notesInput.value.trim() || null,
       category: category,
-      unit: unit || null
+      unit: unit || null,
+      presets: presets
     };
 
     const response = await fetch(`${BACKEND_URL}/api/products`, {
@@ -476,6 +501,8 @@ function clearNewProductForm() {
   document.getElementById("new-product-notes").value = "";
   document.getElementById("new-product-category").value = "grocery";
   document.getElementById("new-product-unit").value = "";
+  document.getElementById("new-product-preset-rows").innerHTML = "";
+  document.getElementById("new-product-preset-section").classList.add("hidden");
   clearError("new-product-error");
 }
 
@@ -487,10 +514,30 @@ function setupPantryForm() {
   const form = document.getElementById("pantry-product-form");
   form.addEventListener("submit", (e) => handlePantryProductSubmit(e));
 
-  // Clear the grocery/unit warning immediately when the user picks a unit
+  // Handle unit change — show/hide preset section
   document.getElementById("pantry-product-unit").addEventListener("change", function() {
+    const presetSection = document.getElementById("pantry-preset-section");
+    const presetRowsContainer = document.getElementById("pantry-preset-rows");
     if (this.value) {
+      presetSection.classList.remove("hidden");
       clearError("pantry-error");
+    } else {
+      presetSection.classList.add("hidden");
+      presetRowsContainer.innerHTML = "";
+    }
+  });
+
+  // Handle preset add button
+  document.getElementById("pantry-add-preset-btn").addEventListener("click", (e) => {
+    e.preventDefault();
+    const presetRowsContainer = document.getElementById("pantry-preset-rows");
+    const unit = document.getElementById("pantry-product-unit").value;
+    if (presetRowsContainer.querySelectorAll(".preset-row").length < 4) {
+      const newRow = document.createElement("div");
+      newRow.innerHTML = buildPresetRowHtml("", unit, presetRowsContainer.querySelectorAll(".preset-row").length);
+      presetRowsContainer.appendChild(newRow.firstElementChild);
+      attachPresetRowListeners(presetRowsContainer, unit);
+      updatePresetAddBtn(presetRowsContainer);
     }
   });
 }
@@ -508,6 +555,7 @@ async function handlePantryProductSubmit(e) {
   const notesInput = document.getElementById("pantry-product-notes");
   const categoryInput = document.getElementById("pantry-product-category");
   const unitInput = document.getElementById("pantry-product-unit");
+  const presetRowsContainer = document.getElementById("pantry-preset-rows");
 
   const name = nameInput.value.trim();
   if (!name) {
@@ -528,6 +576,7 @@ async function handlePantryProductSubmit(e) {
   submitBtn.disabled = true;
 
   try {
+    const presets = collectPresets(presetRowsContainer, unit);
     const payload = {
       name,
       brand: brandInput.value.trim() || null,
@@ -537,7 +586,8 @@ async function handlePantryProductSubmit(e) {
       fat_per_100g: fatInput.value ? parseFloat(fatInput.value) : null,
       notes: notesInput.value.trim() || null,
       category: category,
-      unit: unit || null
+      unit: unit || null,
+      presets: presets
     };
 
     const response = await fetch(`${BACKEND_URL}/api/products`, {
@@ -566,6 +616,8 @@ async function handlePantryProductSubmit(e) {
     notesInput.value = "";
     categoryInput.value = "grocery";
     unitInput.value = "";
+    presetRowsContainer.innerHTML = "";
+    document.getElementById("pantry-preset-section").classList.add("hidden");
 
     showSuccess("pantry-success", "Product added ✓");
     loadPantryProducts();
@@ -828,6 +880,11 @@ function openEditProductModal(productId) {
         <label for="edit-product-notes">Notes</label>
         <textarea id="edit-product-notes">${escapeHtml(product.notes || '')}</textarea>
       </div>
+      <div class="form-group preset-section ${product.unit ? '' : 'hidden'}" id="modal-preset-section">
+        <label>Quantity Presets</label>
+        <div id="modal-preset-rows">${buildPresetRowsHtml(product.presets, product.unit)}</div>
+        <button type="button" id="modal-add-preset-btn" class="link-button">＋ Add preset</button>
+      </div>
       <div class="button-group">
         <button type="submit" class="btn-primary">Save</button>
         <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
@@ -836,6 +893,34 @@ function openEditProductModal(productId) {
   `;
 
   openModal(formHtml);
+
+  const modalPresetRows = document.getElementById("modal-preset-rows");
+  const currentUnit = product.unit;
+  attachPresetRowListeners(modalPresetRows, currentUnit);
+  updatePresetAddBtn(modalPresetRows);
+
+  document.getElementById("edit-product-unit").addEventListener("change", function() {
+    const presetSection = document.getElementById("modal-preset-section");
+    const newUnit = this.value;
+    if (newUnit) {
+      presetSection.classList.remove("hidden");
+    } else {
+      presetSection.classList.add("hidden");
+      modalPresetRows.innerHTML = "";
+    }
+  });
+
+  document.getElementById("modal-add-preset-btn").addEventListener("click", (e) => {
+    e.preventDefault();
+    const newUnit = document.getElementById("edit-product-unit").value;
+    if (modalPresetRows.querySelectorAll(".preset-row").length < 4) {
+      const newRow = document.createElement("div");
+      newRow.innerHTML = buildPresetRowHtml("", newUnit, modalPresetRows.querySelectorAll(".preset-row").length);
+      modalPresetRows.appendChild(newRow.firstElementChild);
+      attachPresetRowListeners(modalPresetRows, newUnit);
+      updatePresetAddBtn(modalPresetRows);
+    }
+  });
 
   document.getElementById("edit-product-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -851,6 +936,8 @@ function openEditProductModal(productId) {
     submitBtn.disabled = true;
 
     try {
+      const currentUnit = document.getElementById("edit-product-unit").value || null;
+      const presets = collectPresets(document.getElementById("modal-preset-rows"), currentUnit);
       const payload = {
         name,
         brand: document.getElementById("edit-product-brand").value.trim() || null,
@@ -860,7 +947,8 @@ function openEditProductModal(productId) {
         fat_per_100g: document.getElementById("edit-product-fat").value ? parseFloat(document.getElementById("edit-product-fat").value) : null,
         notes: document.getElementById("edit-product-notes").value.trim() || null,
         category: document.getElementById("edit-product-category").value,
-        unit: document.getElementById("edit-product-unit").value || null
+        unit: currentUnit,
+        presets: presets
       };
 
       const response = await fetch(`${BACKEND_URL}/api/products/${productId}`, {
@@ -961,6 +1049,77 @@ function escapeHtml(text) {
 function capitalize(str) {
   if (!str) return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+// ============================================================================
+// Preset Helpers
+// ============================================================================
+
+// Build preset rows HTML for add/edit forms. unit = 'g' | 'mL' | '' | null.
+function buildPresetRowsHtml(presets, unit) {
+  return (presets || []).map((p, i) => buildPresetRowHtml(p.quantity, unit, i)).join('');
+}
+
+function buildPresetRowHtml(qty, unit, index) {
+  const label = qty && unit ? `${qty}${unit}` : (qty || '');
+  return `<div class="preset-row" data-index="${index}">
+    <input type="number" class="preset-qty-input" min="0.1" step="0.1" value="${qty || ''}" placeholder="e.g. 250" />
+    <span class="preset-label-preview">${escapeHtml(label)}</span>
+    <button type="button" class="preset-remove-btn btn-danger btn-sm">×</button>
+  </div>`;
+}
+
+function attachPresetRowListeners(container, unit) {
+  container.querySelectorAll('.preset-qty-input').forEach(input => {
+    input.addEventListener('input', () => {
+      const preview = input.closest('.preset-row').querySelector('.preset-label-preview');
+      const val = parseFloat(input.value);
+      preview.textContent = val && unit ? `${val}${unit}` : (input.value || '');
+    });
+  });
+  container.querySelectorAll('.preset-remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.closest('.preset-row').remove();
+      updatePresetAddBtn(container);
+    });
+  });
+}
+
+function updatePresetAddBtn(rowsContainer) {
+  // Disable add button when 4 presets exist
+  const section = rowsContainer.closest('.preset-section') || rowsContainer.parentElement;
+  const addBtn = section.querySelector('[id$="-add-preset-btn"], .add-preset-btn');
+  if (addBtn) addBtn.disabled = rowsContainer.querySelectorAll('.preset-row').length >= 4;
+}
+
+function collectPresets(rowsContainer, unit) {
+  const rows = rowsContainer.querySelectorAll('.preset-row');
+  const presets = [];
+  rows.forEach(row => {
+    const qty = parseFloat(row.querySelector('.preset-qty-input').value);
+    if (!isNaN(qty) && qty > 0) {
+      presets.push({ quantity: qty, label: unit ? `${qty}${unit}` : `${qty}` });
+    }
+  });
+  return presets;
+}
+
+function renderPresetButtons() {
+  const container = document.getElementById('purchase-preset-buttons');
+  const productId = parseInt(document.getElementById('purchase-product').value);
+  const product = products.find(p => p.id === productId);
+  container.innerHTML = '';
+  if (!product || !product.presets || product.presets.length === 0) return;
+  product.presets.forEach(preset => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'preset-fill-btn btn-secondary btn-sm';
+    btn.textContent = preset.label;
+    btn.addEventListener('click', () => {
+      document.getElementById('purchase-quantity').value = preset.quantity;
+    });
+    container.appendChild(btn);
+  });
 }
 
 // ============================================================================
@@ -1506,13 +1665,16 @@ function renderDashboardPurchases(purchaseList) {
       const store = purchase.store_name ? escapeHtml(purchase.store_name) : null;
       const price = parseFloat(purchase.price_total).toFixed(2);
       const category = purchase.category;
+      const prod = products.find(p => p.id === purchase.product_id);
+      const unit = prod ? prod.unit : null;
+      const qtyDisplay = (purchase.quantity && unit) ? ` — ${parseFloat(purchase.quantity).toFixed(0)}${unit}` : '';
 
       return `<div class="purchase-card purchase-card--${category}" data-id="${purchase.id}">
         <div class="purchase-card-top">
           <span class="purchase-card-date">${shortDate}</span>
           <span class="purchase-card-price">€${price}</span>
         </div>
-        <div class="purchase-card-product">${product}</div>
+        <div class="purchase-card-product">${product}${escapeHtml(qtyDisplay)}</div>
         ${store ? `<div class="purchase-card-store">${store}</div>` : ''}
         <div class="purchase-card-actions">
           <button class="btn-secondary btn-sm edit-purchase-btn" data-id="${purchase.id}">Edit</button>
