@@ -1051,9 +1051,10 @@ h2 {
     margin-bottom: 24px;
   }
 
-  /* Show both chart panels side-by-side on desktop */
+  /* Show both chart panels side-by-side on desktop, and always show purchases below */
   #dashboard-spend,
-  #dashboard-categories {
+  #dashboard-categories,
+  #dashboard-purchases {
     display: block !important;
   }
 
