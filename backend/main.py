@@ -13,6 +13,7 @@ Phase 1 endpoints (product + purchase management):
 - POST   /api/products            : add a new product to the pantry
 - PUT    /api/products/{id}       : update a product
 - DELETE /api/products/{id}       : delete a product
+- POST   /api/purchases/batch     : log multiple purchases in one transaction
 - POST   /api/purchases           : log a purchase
 - GET    /api/purchases           : list purchases (with filters)
 - PUT    /api/purchases/{id}      : update a purchase
@@ -20,6 +21,8 @@ Phase 1 endpoints (product + purchase management):
 - GET    /api/dashboard/spend     : daily spend totals for a month
 - GET    /api/dashboard/categories: spend by category for a month
 """
+
+from __future__ import annotations
 
 import os
 from contextlib import contextmanager
@@ -163,6 +166,21 @@ class ProductUpdate(BaseModel):
     notes: str | None = Field(None, max_length=1000)
     category: Literal['grocery','alcohol','nicotine','event','badminton','other'] | None = None
     unit: Literal['g','mL'] | None = None
+
+
+class PurchaseItemIn(BaseModel):
+    """One item in a batch purchase."""
+    product_id: int
+    quantity: float | None = Field(None, gt=0, le=100000)
+    price_total: float = Field(..., gt=0, le=10000)
+    notes: str | None = Field(None, max_length=1000)
+
+
+class BatchPurchaseIn(BaseModel):
+    """Batch purchase request — one store, one date, multiple items."""
+    store_id: int | None = None
+    date: date
+    items: list[PurchaseItemIn] = Field(..., min_length=1)
 
 
 class PurchaseIn(BaseModel):
@@ -416,6 +434,71 @@ def create_product(request: Request, product: ProductIn):
         raise
     except Exception as e:
         logger.error("Unexpected error in create_product: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/purchases/batch", response_model=list[PurchaseOut], status_code=201)
+@limiter.limit("10/minute")
+def create_purchases_batch(request: Request, batch: BatchPurchaseIn):
+    """Creates multiple purchases in a single transaction."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                # Validate store if provided
+                if batch.store_id is not None:
+                    cur.execute("SELECT id FROM stores WHERE id = %s", (batch.store_id,))
+                    if cur.fetchone() is None:
+                        raise HTTPException(status_code=404, detail="Store not found")
+
+                results = []
+                for item in batch.items:
+                    # Validate product
+                    cur.execute("SELECT name, category FROM products WHERE id = %s", (item.product_id,))
+                    product_row = cur.fetchone()
+                    if product_row is None:
+                        raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
+                    product_name, category = product_row
+
+                    cur.execute(
+                        """
+                        INSERT INTO purchases
+                        (product_id, store_id, date, quantity, price_total, notes)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING id, product_id, store_id, date, quantity,
+                                  price_total, notes, created_at
+                        """,
+                        (item.product_id, batch.store_id, batch.date,
+                         item.quantity, item.price_total, item.notes),
+                    )
+                    row = cur.fetchone()
+
+                    # Fetch store name
+                    store_name = None
+                    if batch.store_id is not None:
+                        cur.execute("SELECT name FROM stores WHERE id = %s", (batch.store_id,))
+                        store_row = cur.fetchone()
+                        store_name = store_row[0] if store_row else None
+
+                    results.append({
+                        "id": row[0],
+                        "product_id": row[1],
+                        "product_name": product_name,
+                        "store_id": row[2],
+                        "store_name": store_name,
+                        "category": category,
+                        "date": row[3],
+                        "quantity": row[4],
+                        "price_total": row[5],
+                        "notes": row[6],
+                        "created_at": row[7].isoformat() if row[7] else None,
+                    })
+
+                conn.commit()
+                return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in create_purchases_batch: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

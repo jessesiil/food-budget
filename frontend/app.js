@@ -4,6 +4,7 @@
 let products = [];
 let stores = [];
 let currentPurchases = [];
+let cart = []; // { id, product_id, product_name, unit, quantity, price_total, notes }
 
 // Initialize
 document.addEventListener("DOMContentLoaded", () => {
@@ -16,6 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupStoresForm();
   setupDashboard();
   initializeDashboard();
+  renderCart();
 });
 
 // ============================================================================
@@ -148,98 +150,171 @@ function switchTab(tabName) {
 // ============================================================================
 
 function setupPurchaseForm() {
-  const form = document.getElementById("purchase-form");
-  form.addEventListener("submit", (e) => handlePurchaseSubmit(e));
+  document.getElementById("add-to-cart-btn").addEventListener("click", handleAddToCart);
 
-  // Add change listener to product dropdown to show/hide quantity field
   document.getElementById("purchase-product").addEventListener("change", function() {
     const selectedOption = this.options[this.selectedIndex];
     const unit = selectedOption.dataset.unit;
     const quantityGroup = document.getElementById("purchase-quantity-group");
     const unitLabel = document.getElementById("purchase-quantity-unit");
     if (unit) {
-      quantityGroup.style.display = '';
+      quantityGroup.style.display = "";
       unitLabel.textContent = unit;
     } else {
-      quantityGroup.style.display = 'none';
-      document.getElementById("purchase-quantity").value = '';
+      quantityGroup.style.display = "none";
+      document.getElementById("purchase-quantity").value = "";
     }
   });
+
+  document.getElementById("submit-cart-btn").addEventListener("click", handleSubmitCart);
 }
 
-async function handlePurchaseSubmit(e) {
-  e.preventDefault();
+function handleAddToCart() {
   clearError("log-purchase-error");
 
   const productSelect = document.getElementById("purchase-product");
-  const storeSelect = document.getElementById("purchase-store");
-  const dateInput = document.getElementById("purchase-date");
   const quantityInput = document.getElementById("purchase-quantity");
   const priceInput = document.getElementById("purchase-price");
   const notesInput = document.getElementById("purchase-notes");
 
-  // Validate
   if (!productSelect.value) {
     showError("log-purchase-error", "Please select a product.");
     return;
   }
 
-  // Validate quantity only if the quantity field is visible
   const quantityGroup = document.getElementById("purchase-quantity-group");
-  const quantityVisible = quantityGroup.style.display !== 'none';
+  const quantityVisible = quantityGroup.style.display !== "none";
   if (quantityVisible) {
-    const quantity = parseFloat(quantityInput.value);
-    if (!quantity || quantity <= 0) {
+    const qty = parseFloat(quantityInput.value);
+    if (!qty || qty <= 0) {
       showError("log-purchase-error", "Quantity must be greater than 0.");
       return;
     }
   }
 
   const price = parseFloat(priceInput.value);
-
   if (!price || price <= 0) {
     showError("log-purchase-error", "Price must be greater than 0.");
     return;
   }
 
+  const selectedOption = productSelect.options[productSelect.selectedIndex];
+  const unit = selectedOption.dataset.unit || null;
+
+  cart.push({
+    id: crypto.randomUUID(),
+    product_id: parseInt(productSelect.value),
+    product_name: selectedOption.text,
+    unit,
+    quantity: quantityVisible && quantityInput.value ? parseFloat(quantityInput.value) : null,
+    price_total: price,
+    notes: notesInput.value.trim() || null,
+  });
+
+  // Clear item fields, keep product selected for quick re-entry
+  quantityInput.value = "";
+  priceInput.value = "";
+  notesInput.value = "";
+  if (quantityVisible) quantityInput.focus();
+  else priceInput.focus();
+
+  renderCart();
+}
+
+function renderCart() {
+  const cartItems = document.getElementById("cart-items");
+  const cartCount = document.getElementById("cart-count");
+  const cartTotal = document.getElementById("cart-total");
+  const submitBtn = document.getElementById("submit-cart-btn");
+  const cartSection = document.getElementById("cart-section");
+
+  cartCount.textContent = cart.length > 0 ? `(${cart.length})` : "";
+  submitBtn.disabled = cart.length === 0;
+  cartSection.style.display = cart.length === 0 ? "none" : "block";
+
+  if (cart.length === 0) {
+    cartItems.innerHTML = "";
+    cartTotal.textContent = "";
+    return;
+  }
+
+  const total = cart.reduce((sum, item) => sum + item.price_total, 0);
+  cartTotal.textContent = `Total: €${total.toFixed(2)}`;
+
+  cartItems.innerHTML = cart.map(item => {
+    const qtyStr = item.quantity ? `${item.quantity}${item.unit || ""}` : null;
+    const detail = [qtyStr, item.notes].filter(Boolean).join(" · ");
+    return `<div class="cart-item" data-id="${item.id}">
+      <div class="cart-item-info">
+        <span class="cart-item-name">${escapeHtml(item.product_name)}</span>
+        ${detail ? `<span class="cart-item-detail">${escapeHtml(detail)}</span>` : ""}
+      </div>
+      <div class="cart-item-right">
+        <span class="cart-item-price">€${item.price_total.toFixed(2)}</span>
+        <button class="cart-remove-btn" data-id="${item.id}" aria-label="Remove">×</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  cartItems.querySelectorAll(".cart-remove-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      cart = cart.filter(item => item.id !== btn.dataset.id);
+      renderCart();
+    });
+  });
+}
+
+async function handleSubmitCart() {
   clearError("log-purchase-error");
 
-  const submitBtn = document.getElementById("purchase-submit");
+  const storeSelect = document.getElementById("purchase-store");
+  const dateInput = document.getElementById("purchase-date");
+
+  if (!dateInput.value) {
+    showError("log-purchase-error", "Please set a date for this trip.");
+    return;
+  }
+
+  if (cart.length === 0) {
+    showError("log-purchase-error", "Cart is empty.");
+    return;
+  }
+
+  const submitBtn = document.getElementById("submit-cart-btn");
   submitBtn.disabled = true;
 
   try {
     const payload = {
-      product_id: parseInt(productSelect.value),
       store_id: storeSelect.value ? parseInt(storeSelect.value) : null,
       date: dateInput.value,
-      quantity: quantityInput.value ? parseFloat(quantityInput.value) : null,
-      price_total: price,
-      notes: notesInput.value || null
+      items: cart.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        price_total: item.price_total,
+        notes: item.notes,
+      })),
     };
 
-    const response = await fetch(`${BACKEND_URL}/api/purchases`, {
+    const response = await fetch(`${BACKEND_URL}/api/purchases/batch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const errorMsg = errorData.detail || errorData.message || "Failed to log purchase";
-      throw new Error(errorMsg);
+      throw new Error(errorData.detail || errorData.message || "Failed to submit cart");
     }
 
-    // Success
-    showSuccess("log-purchase-success", "Purchase logged ✓");
-    // Clear quantity, price, notes; keep product, store, date for repeat entry
-    quantityInput.value = "";
-    priceInput.value = "";
-    notesInput.value = "";
-    quantityInput.focus();
+    // Success — clear cart, show confirmation
+    const count = cart.length;
+    cart = [];
+    renderCart();
+    showSuccess("log-purchase-success", `${count} purchase${count !== 1 ? "s" : ""} logged ✓`);
   } catch (err) {
     showError("log-purchase-error", `Error: ${err.message}`);
   } finally {
-    submitBtn.disabled = false;
+    submitBtn.disabled = cart.length === 0;
   }
 }
 

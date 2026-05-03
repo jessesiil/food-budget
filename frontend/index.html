@@ -38,19 +38,36 @@
       <div id="log-purchase-error" class="error-message"></div>
       <div id="log-purchase-success" class="success-message"></div>
 
-      <form id="purchase-form">
-        <!-- Product field -->
+      <!-- Trip header: store + date (shared across all items) -->
+      <div class="cart-trip-header">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="purchase-store">Store</label>
+            <select id="purchase-store">
+              <option value="">— no store —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="purchase-date">Date</label>
+            <input type="date" id="purchase-date" required />
+          </div>
+        </div>
+      </div>
+
+      <!-- Item entry form -->
+      <div class="cart-item-form">
+        <h2>Add item</h2>
         <div class="form-group">
           <label for="purchase-product">Product</label>
           <div class="product-select-wrapper">
-            <select id="purchase-product" required>
+            <select id="purchase-product">
               <option value="" disabled selected>— select a product —</option>
             </select>
-            <button type="button" id="new-product-toggle" class="link-button">＋ New product</button>
+            <button type="button" id="new-product-toggle" class="link-button">＋ New</button>
           </div>
         </div>
 
-        <!-- Inline new product form -->
+        <!-- Inline new product form (unchanged from before) -->
         <div id="new-product-form-container" class="new-product-form-container hidden">
           <fieldset class="new-product-form">
             <legend>Add a new product</legend>
@@ -113,40 +130,33 @@
           </fieldset>
         </div>
 
-        <!-- Store field -->
-        <div class="form-group">
-          <label for="purchase-store">Store</label>
-          <select id="purchase-store">
-            <option value="">— no store —</option>
-          </select>
-        </div>
-
-        <!-- Date field -->
-        <div class="form-group">
-          <label for="purchase-date">Date</label>
-          <input type="date" id="purchase-date" required />
-        </div>
-
-        <!-- Quantity field -->
         <div class="form-group" id="purchase-quantity-group">
           <label for="purchase-quantity">Quantity (<span id="purchase-quantity-unit">g</span>)</label>
           <input type="number" id="purchase-quantity" min="0.1" step="0.1" placeholder="e.g. 600" />
         </div>
 
-        <!-- Price field -->
         <div class="form-group">
           <label for="purchase-price">Total price (€)</label>
           <input type="number" id="purchase-price" min="0.01" step="0.01" placeholder="e.g. 5.49" required />
         </div>
 
-        <!-- Notes field -->
         <div class="form-group">
           <label for="purchase-notes">Notes</label>
-          <textarea id="purchase-notes" placeholder="optional notes"></textarea>
+          <textarea id="purchase-notes" placeholder="optional"></textarea>
         </div>
 
-        <button type="submit" id="purchase-submit" class="btn-primary btn-large">Log purchase</button>
-      </form>
+        <button type="button" id="add-to-cart-btn" class="btn-secondary btn-large">Add to cart</button>
+      </div>
+
+      <!-- Cart -->
+      <div class="cart-section" id="cart-section">
+        <h2>Cart <span id="cart-count" class="cart-count"></span></h2>
+        <div id="cart-items" class="cart-items-list"></div>
+        <div class="cart-footer">
+          <div id="cart-total" class="cart-total"></div>
+          <button type="button" id="submit-cart-btn" class="btn-primary btn-large" disabled>Submit cart</button>
+        </div>
+      </div>
     </section>
 
     <!-- Pantry tab -->
