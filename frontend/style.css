@@ -1168,6 +1168,27 @@ h2 {
 }
 .preset-fill-btn { font-size: 0.85rem; }
 
+/* Nutrition chart styles */
+.nutrition-week-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.nutrition-chart-container {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+#dashboard-macros-canvas {
+  max-width: 100%;
+  height: auto;
+  min-height: 260px;
+}
+
 /* Responsive: laptop view (>= 768px) */
 @media (min-width: 768px) {
   main {
@@ -1191,7 +1212,8 @@ h2 {
   /* Show both chart panels side-by-side on desktop, and always show purchases below */
   #dashboard-spend,
   #dashboard-categories,
-  #dashboard-purchases {
+  #dashboard-purchases,
+  #dashboard-nutrition {
     display: block !important;
   }
 

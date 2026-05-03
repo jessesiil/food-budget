@@ -21,6 +21,7 @@ Phase 1 endpoints (product + purchase management):
 - DELETE /api/purchases/{id}      : delete a purchase
 - GET    /api/dashboard/spend     : daily spend totals for a month
 - GET    /api/dashboard/categories: spend by category for a month
+- GET    /api/dashboard/macros    : daily macro totals (protein, carbs, fat) for a week
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from __future__ import annotations
 import os
 import json
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from datetime import date as _Date
 from typing import Literal
 import logging
@@ -125,6 +126,36 @@ def get_month_boundaries(month_str: str | None) -> tuple[str, str, str]:
         next_month_first_day = f"{year:04d}-{month+1:02d}-01"
 
     return month_str, first_day, next_month_first_day
+
+
+def get_week_boundaries(week_str: str | None) -> tuple[str, str]:
+    """
+    Parse week_str (YYYY-MM-DD format, must be a Monday) or use the Monday of the current week.
+    Returns (week_start, week_end) as ISO date strings, where week_end is the Sunday.
+    """
+    if week_str:
+        try:
+            dt = datetime.strptime(week_str, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid week format, expected YYYY-MM-DD")
+
+        # Check if it's a Monday (weekday 0 = Monday)
+        if dt.weekday() != 0:
+            raise HTTPException(status_code=400, detail="week must be a Monday (YYYY-MM-DD)")
+
+        week_start = dt.isoformat()
+    else:
+        # Get Monday of current week
+        today = datetime.now().date()
+        days_since_monday = today.weekday()  # 0 = Monday, 6 = Sunday
+        dt = today - timedelta(days=days_since_monday)
+        week_start = dt.isoformat()
+
+    # Calculate Sunday (6 days after Monday)
+    week_end_date = datetime.strptime(week_start, "%Y-%m-%d").date() + timedelta(days=6)
+    week_end = week_end_date.isoformat()
+
+    return week_start, week_end
 
 
 # Pydantic models for request/response validation and serialization.
@@ -257,6 +288,30 @@ class DashboardCategoriesOut(BaseModel):
     month: str
     total: float
     categories: list[CategorySpendOut]
+
+
+class DailyMacroOut(BaseModel):
+    """Daily macro entry for dashboard."""
+    date: str
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+
+
+class MacroTotalsOut(BaseModel):
+    """Totals for macro dashboard."""
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    calories: float
+
+
+class DashboardMacrosOut(BaseModel):
+    """Dashboard macros response."""
+    week_start: str
+    week_end: str
+    days: list[DailyMacroOut]
+    totals: MacroTotalsOut
 
 
 @contextmanager
@@ -1078,4 +1133,92 @@ def delete_purchase(request: Request, purchase_id: int):
         raise
     except Exception as e:
         logger.error("Unexpected error in delete_purchase: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/dashboard/macros", response_model=DashboardMacrosOut)
+@limiter.limit("30/minute")
+def get_dashboard_macros(
+    request: Request,
+    week: str | None = Query(None, description="Week start (Monday) in YYYY-MM-DD format (defaults to current week)"),
+):
+    """Returns daily macro totals (protein, carbs, fat in grams) for the given week."""
+    try:
+        week_start, week_end = get_week_boundaries(week)
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                # Query macro data for the week
+                cur.execute(
+                    """
+                    SELECT pu.date,
+                           SUM(p.protein_per_100g / 100.0 * pu.quantity),
+                           SUM(p.carbs_per_100g / 100.0 * pu.quantity),
+                           SUM(p.fat_per_100g / 100.0 * pu.quantity)
+                    FROM purchases pu
+                    JOIN products p ON p.id = pu.product_id
+                    WHERE pu.date >= %s AND pu.date <= %s
+                      AND p.unit IS NOT NULL
+                      AND pu.quantity IS NOT NULL
+                      AND p.protein_per_100g IS NOT NULL
+                      AND p.carbs_per_100g IS NOT NULL
+                      AND p.fat_per_100g IS NOT NULL
+                    GROUP BY pu.date
+                    ORDER BY pu.date ASC
+                    """,
+                    (week_start, week_end),
+                )
+                rows = cur.fetchall()
+
+                # Create a mapping from date string to macro data
+                macro_data = {}
+                for date_str, protein, carbs, fat in rows:
+                    macro_data[date_str] = {
+                        "protein_g": float(protein) if protein else 0.0,
+                        "carbs_g": float(carbs) if carbs else 0.0,
+                        "fat_g": float(fat) if fat else 0.0,
+                    }
+
+                # Build full week skeleton (Mon-Sun)
+                week_start_date = datetime.strptime(week_start, "%Y-%m-%d").date()
+                days = []
+                for i in range(7):  # 0=Monday through 6=Sunday
+                    current_date = week_start_date + timedelta(days=i)
+                    date_key = current_date.isoformat()
+                    if date_key in macro_data:
+                        days.append({
+                            "date": date_key,
+                            "protein_g": macro_data[date_key]["protein_g"],
+                            "carbs_g": macro_data[date_key]["carbs_g"],
+                            "fat_g": macro_data[date_key]["fat_g"],
+                        })
+                    else:
+                        days.append({
+                            "date": date_key,
+                            "protein_g": 0.0,
+                            "carbs_g": 0.0,
+                            "fat_g": 0.0,
+                        })
+
+                # Calculate totals
+                total_protein = sum(d["protein_g"] for d in days)
+                total_carbs = sum(d["carbs_g"] for d in days)
+                total_fat = sum(d["fat_g"] for d in days)
+                total_calories = total_protein * 4 + total_carbs * 4 + total_fat * 9
+
+                return {
+                    "week_start": week_start,
+                    "week_end": week_end,
+                    "days": days,
+                    "totals": {
+                        "protein_g": total_protein,
+                        "carbs_g": total_carbs,
+                        "fat_g": total_fat,
+                        "calories": total_calories,
+                    },
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in get_dashboard_macros: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

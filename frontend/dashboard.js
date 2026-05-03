@@ -3,16 +3,68 @@
 // ============================================================================
 
 let dashboardMonth = null;
+let dashboardWeekStart = null;
 let spendChart = null;
 let categoryChart = null;
+let macroChart = null;
 let dashboardCurrentSortBy = "date";
 let dashboardCurrentSortDir = "desc";
 let currentPurchases = [];
+
+// Returns "YYYY-MM-DD" for the Monday of the week containing `date`
+function getMondayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Returns "YYYY-MM-DD" for a date offset by `days` from a "YYYY-MM-DD" string
+function offsetDate(dateStr, days) {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function previousWeek() {
+  dashboardWeekStart = offsetDate(dashboardWeekStart, -7);
+  updateDashboardWeekLabel();
+  loadDashboardMacros();
+}
+
+function nextWeek() {
+  const nextMonday = offsetDate(dashboardWeekStart, 7);
+  const todayMonday = getMondayOfWeek(new Date());
+  if (nextMonday > todayMonday) return; // don't go into the future
+  dashboardWeekStart = nextMonday;
+  updateDashboardWeekLabel();
+  loadDashboardMacros();
+}
+
+function updateDashboardWeekLabel() {
+  const sunday = offsetDate(dashboardWeekStart, 6);
+  const start = new Date(dashboardWeekStart + "T00:00:00");
+  const end   = new Date(sunday + "T00:00:00");
+  const fmt = { day: "numeric", month: "short" };
+  const label = `${start.toLocaleDateString("en-GB", fmt)} – ${end.toLocaleDateString("en-GB", fmt)}`;
+  document.getElementById("dashboard-current-week").textContent = label;
+  document.getElementById("dashboard-nutrition-title").textContent =
+    `Macros — w/c ${start.toLocaleDateString("en-GB", fmt)}`;
+
+  // Disable next button if at current week
+  const todayMonday = getMondayOfWeek(new Date());
+  document.getElementById("dashboard-next-week").disabled = dashboardWeekStart >= todayMonday;
+}
 
 function setupDashboard() {
   // Initialize month to current month
   const now = new Date();
   dashboardMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  // Initialize week to current week
+  dashboardWeekStart = getMondayOfWeek(new Date());
+  updateDashboardWeekLabel();
 
   // Month navigation
   document.getElementById("dashboard-prev-month").addEventListener("click", () => {
@@ -21,6 +73,10 @@ function setupDashboard() {
   document.getElementById("dashboard-next-month").addEventListener("click", () => {
     nextMonth();
   });
+
+  // Week navigation
+  document.getElementById("dashboard-prev-week").addEventListener("click", previousWeek);
+  document.getElementById("dashboard-next-week").addEventListener("click", nextWeek);
 
   // Dashboard sub-tabs (mobile)
   document.querySelectorAll(".dashboard-tab-button").forEach((button) => {
@@ -60,6 +116,7 @@ function initializeDashboard() {
   updateDashboardMonthLabel();
   updateMonthNavigationButtons();
   loadDashboardData();
+  loadDashboardMacros();
 }
 
 function previousMonth() {
@@ -128,6 +185,8 @@ function switchDashboardTab(tabName) {
     spendChart.resize();
   } else if (tabName === "categories" && categoryChart) {
     categoryChart.resize();
+  } else if (tabName === "nutrition" && macroChart) {
+    macroChart.resize();
   }
 }
 
@@ -652,4 +711,82 @@ function openEditPurchaseModal(purchaseId) {
       submitBtn.disabled = false;
     }
   });
+}
+
+async function loadDashboardMacros() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/dashboard/macros?week=${dashboardWeekStart}`);
+    if (!response.ok) {
+      throw new Error("Failed to load macros");
+    }
+    const data = await response.json();
+    renderMacroChart(data);
+  } catch (err) {
+    showError("dashboard-error", `Error loading macros: ${err.message}`);
+  }
+}
+
+function renderMacroChart(data) {
+  const canvas  = document.getElementById("dashboard-macros-canvas");
+  const emptyDiv = document.getElementById("dashboard-macros-empty");
+  const caloriesDiv = document.getElementById("dashboard-macros-calories");
+
+  // Check if all days are zero
+  const hasData = data.days.some(d => d.protein_g > 0 || d.carbs_g > 0 || d.fat_g > 0);
+
+  if (!hasData) {
+    canvas.style.display = "none";
+    emptyDiv.style.display = "block";
+    caloriesDiv.textContent = "";
+    if (macroChart) { macroChart.destroy(); macroChart = null; }
+    return;
+  }
+
+  canvas.style.display = "block";
+  emptyDiv.style.display = "none";
+
+  const labels = data.days.map(d => {
+    const date = new Date(d.date + "T00:00:00");
+    return date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
+  });
+
+  const proteinData = data.days.map(d => Math.round(d.protein_g * 10) / 10);
+  const carbsData   = data.days.map(d => Math.round(d.carbs_g * 10) / 10);
+  const fatData     = data.days.map(d => Math.round(d.fat_g * 10) / 10);
+
+  if (macroChart) { macroChart.destroy(); }
+
+  macroChart = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        { label: "Protein (g)",      data: proteinData, backgroundColor: "#2563eb", stack: "macros" },
+        { label: "Carbs (g)",        data: carbsData,   backgroundColor: "#f59e0b", stack: "macros" },
+        { label: "Fat (g)",          data: fatData,     backgroundColor: "#ef4444", stack: "macros" },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}g`
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, title: { display: true, text: "grams" } }
+      }
+    }
+  });
+
+  // Calories summary
+  const cal = Math.round(data.totals.calories);
+  const prot = Math.round(data.totals.protein_g);
+  const carb = Math.round(data.totals.carbs_g);
+  const fat  = Math.round(data.totals.fat_g);
+  caloriesDiv.textContent = `Week total: ~${cal.toLocaleString()} kcal  ·  ${prot}g protein  ·  ${carb}g carbs  ·  ${fat}g fat`;
 }

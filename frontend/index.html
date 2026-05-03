@@ -257,6 +257,7 @@
         <button class="dashboard-tab-button active" data-dashboard-tab="spend">Spending</button>
         <button class="dashboard-tab-button" data-dashboard-tab="categories">Categories</button>
         <button class="dashboard-tab-button" data-dashboard-tab="purchases">Purchases</button>
+        <button class="dashboard-tab-button" data-dashboard-tab="nutrition">Nutrition</button>
       </div>
 
       <!-- Charts grid (side-by-side on desktop, stacked on mobile) -->
@@ -312,6 +313,21 @@
         </table>
 
         <div id="dashboard-purchases-empty" class="dashboard-empty-state">No purchases for this month</div>
+      </div>
+
+      <!-- Nutrition panel -->
+      <div id="dashboard-nutrition" class="dashboard-tab-content">
+        <div class="nutrition-chart-container">
+          <div class="nutrition-week-selector">
+            <button id="dashboard-prev-week" class="dashboard-nav-btn">‹</button>
+            <span id="dashboard-current-week" class="dashboard-week-label">May 5 – May 11</span>
+            <button id="dashboard-next-week" class="dashboard-nav-btn">›</button>
+          </div>
+          <h3 id="dashboard-nutrition-title">Macros — week of May 5</h3>
+          <canvas id="dashboard-macros-canvas"></canvas>
+          <div id="dashboard-macros-empty" class="dashboard-empty-state" style="display:none">No macro data for this week — add nutrition info to your products to see this chart.</div>
+          <div id="dashboard-macros-calories" class="dashboard-total"></div>
+        </div>
       </div>
     </section>
 
