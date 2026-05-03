@@ -149,6 +149,32 @@ function switchTab(tabName) {
 // Purchase Form
 // ============================================================================
 
+async function prefillPrice() {
+  const productSelect = document.getElementById("purchase-product");
+  const storeSelect = document.getElementById("purchase-store");
+  const priceInput = document.getElementById("purchase-price");
+
+  const productId = productSelect.value;
+  const storeId = storeSelect.value;
+
+  // Only attempt if both product and store are selected
+  if (!productId || !storeId) return;
+
+  try {
+    const response = await fetch(
+      `${BACKEND_URL}/api/purchases/last-price?product_id=${productId}&store_id=${storeId}`
+    );
+    if (!response.ok) return; // Fail silently — pre-fill is best-effort
+
+    const data = await response.json();
+    if (data.price !== null && data.price !== undefined) {
+      priceInput.value = data.price.toFixed(2);
+    }
+  } catch {
+    // Fail silently — pre-fill is best-effort, never block the user
+  }
+}
+
 function setupPurchaseForm() {
   document.getElementById("add-to-cart-btn").addEventListener("click", handleAddToCart);
 
@@ -164,7 +190,10 @@ function setupPurchaseForm() {
       quantityGroup.style.display = "none";
       document.getElementById("purchase-quantity").value = "";
     }
+    prefillPrice();
   });
+
+  document.getElementById("purchase-store").addEventListener("change", prefillPrice);
 
   document.getElementById("submit-cart-btn").addEventListener("click", handleSubmitCart);
 }

@@ -13,6 +13,7 @@ Phase 1 endpoints (product + purchase management):
 - POST   /api/products            : add a new product to the pantry
 - PUT    /api/products/{id}       : update a product
 - DELETE /api/products/{id}       : delete a product
+- GET    /api/purchases/last-price : last price for a product+store combination
 - POST   /api/purchases/batch     : log multiple purchases in one transaction
 - POST   /api/purchases           : log a purchase
 - GET    /api/purchases           : list purchases (with filters)
@@ -435,6 +436,36 @@ def create_product(request: Request, product: ProductIn):
         raise
     except Exception as e:
         logger.error("Unexpected error in create_product: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/purchases/last-price")
+@limiter.limit("60/minute")
+def get_last_price(
+    request: Request,
+    product_id: int = Query(..., description="Product ID"),
+    store_id: int = Query(..., description="Store ID"),
+):
+    """Returns the price_total from the most recent purchase of a product at a store."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT price_total
+                    FROM purchases
+                    WHERE product_id = %s AND store_id = %s
+                    ORDER BY date DESC, created_at DESC
+                    LIMIT 1
+                    """,
+                    (product_id, store_id),
+                )
+                row = cur.fetchone()
+                return {"price": float(row[0]) if row else None}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in get_last_price: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
