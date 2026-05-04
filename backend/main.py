@@ -180,7 +180,7 @@ class ProductIn(BaseModel):
     carbs_per_100g: float | None = Field(None, ge=0, le=100)
     fat_per_100g: float | None = Field(None, ge=0, le=100)
     notes: str | None = Field(None, max_length=1000)
-    category: Literal['grocery','alcohol','nicotine','event','badminton','other'] = 'grocery'
+    category: Literal['grocery','alcohol','nicotine','event','badminton','travel','other'] = 'grocery'
     unit: Literal['g','mL'] | None = None
     presets: list[PresetModel] = Field(default_factory=list, max_length=4)
 
@@ -209,7 +209,7 @@ class ProductUpdate(BaseModel):
     carbs_per_100g: float | None = Field(None, ge=0, le=100)
     fat_per_100g: float | None = Field(None, ge=0, le=100)
     notes: str | None = Field(None, max_length=1000)
-    category: Literal['grocery','alcohol','nicotine','event','badminton','other'] | None = None
+    category: Literal['grocery','alcohol','nicotine','event','badminton','travel','other'] | None = None
     unit: Literal['g','mL'] | None = None
     presets: list[PresetModel] | None = Field(None, max_length=4)
 

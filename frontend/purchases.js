@@ -161,7 +161,7 @@ function setupNewProductForm() {
     clearNewProductForm();
   });
 
-  // Handle unit change — show/hide preset section
+  // Handle unit change — show/hide preset section and update nutrition labels
   document.getElementById("new-product-unit").addEventListener("change", function() {
     const presetSection = document.getElementById("new-product-preset-section");
     const presetRowsContainer = document.getElementById("new-product-preset-rows");
@@ -172,6 +172,11 @@ function setupNewProductForm() {
       presetSection.classList.add("hidden");
       presetRowsContainer.innerHTML = "";
     }
+    const suffix = this.value === 'mL' ? '/100mL' : '/100g';
+    document.querySelector('label[for="new-product-calories"]').textContent = `Calories${suffix}`;
+    document.querySelector('label[for="new-product-protein"]').textContent = `Protein${suffix}`;
+    document.querySelector('label[for="new-product-carbs"]').textContent = `Carbs${suffix}`;
+    document.querySelector('label[for="new-product-fat"]').textContent = `Fat${suffix}`;
   });
 
   // Handle preset add button

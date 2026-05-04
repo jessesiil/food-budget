@@ -170,8 +170,10 @@ async function handleSaveNewProduct() {
     products.push(newProduct);
     populateProductDropdown();
 
-    // Auto-select the new product
-    document.getElementById("purchase-product").value = newProduct.id;
+    // Auto-select the new product and trigger change handler
+    const productSelect = document.getElementById("purchase-product");
+    productSelect.value = newProduct.id;
+    productSelect.dispatchEvent(new Event('change'));
 
     // Hide form and clear
     document.getElementById("new-product-form-container").classList.add("hidden");
