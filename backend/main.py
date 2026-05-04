@@ -1151,7 +1151,7 @@ def get_dashboard_macros(
                 # Query macro data for the week
                 cur.execute(
                     """
-                    SELECT pu.date,
+                    SELECT pu.date::text,
                            SUM(p.protein_per_100g / 100.0 * pu.quantity),
                            SUM(p.carbs_per_100g / 100.0 * pu.quantity),
                            SUM(p.fat_per_100g / 100.0 * pu.quantity)
