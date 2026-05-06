@@ -2,7 +2,8 @@
 // Log Purchase Tab
 // ============================================================================
 
-let cart = []; // { id, product_id, product_name, unit, quantity, price_total, notes }
+let cart = []; // { id, product_id, product_name, unit, quantity, price_total, notes } OR { type: 'oneoff', description, category, price_total, notes }
+let purchaseMode = 'product'; // 'product' or 'oneoff'
 
 function initializeDateField() {
   const dateInput = document.getElementById("purchase-date");
@@ -38,11 +39,61 @@ function setupPurchaseForm() {
   document.getElementById("purchase-store").addEventListener("change", prefillPrice);
 
   document.getElementById("submit-cart-btn").addEventListener("click", handleSubmitCart);
+
+  // Mode toggle
+  document.getElementById("mode-product-btn").addEventListener("click", () => {
+    purchaseMode = "product";
+    document.getElementById("mode-product-btn").classList.add("active");
+    document.getElementById("mode-oneoff-btn").classList.remove("active");
+    document.getElementById("product-fields").classList.remove("hidden");
+    document.getElementById("oneoff-fields").classList.add("hidden");
+  });
+
+  document.getElementById("mode-oneoff-btn").addEventListener("click", () => {
+    purchaseMode = "oneoff";
+    document.getElementById("mode-oneoff-btn").classList.add("active");
+    document.getElementById("mode-product-btn").classList.remove("active");
+    document.getElementById("oneoff-fields").classList.remove("hidden");
+    document.getElementById("product-fields").classList.add("hidden");
+  });
 }
 
 function handleAddToCart() {
   clearError("log-purchase-error");
 
+  if (purchaseMode === 'oneoff') {
+    const description = document.getElementById("oneoff-description").value.trim();
+    const category = document.getElementById("oneoff-category").value;
+    const price = parseFloat(document.getElementById("purchase-price").value);
+    const notes = document.getElementById("purchase-notes").value.trim() || null;
+
+    if (!description) {
+      showError("log-purchase-error", "Description is required for a one-off purchase.");
+      return;
+    }
+    if (!price || price <= 0) {
+      showError("log-purchase-error", "Price is required.");
+      return;
+    }
+
+    cart.push({
+      type: 'oneoff',
+      description,
+      category,
+      price_total: price,
+      notes,
+    });
+
+    // Reset one-off fields
+    document.getElementById("oneoff-description").value = "";
+    document.getElementById("purchase-price").value = "";
+    document.getElementById("purchase-notes").value = "";
+    clearError("log-purchase-error");
+    renderCart();
+    return;
+  }
+
+  // Product mode (existing logic)
   const productSelect = document.getElementById("purchase-product");
   const quantityInput = document.getElementById("purchase-quantity");
   const priceInput = document.getElementById("purchase-price");
@@ -112,24 +163,34 @@ function renderCart() {
   const total = cart.reduce((sum, item) => sum + item.price_total, 0);
   cartTotal.textContent = `Total: €${total.toFixed(2)}`;
 
-  cartItems.innerHTML = cart.map(item => {
-    const qtyStr = item.quantity ? `${item.quantity}${item.unit || ""}` : null;
+  cartItems.innerHTML = cart.map((item, index) => {
+    const displayName = item.type === 'oneoff'
+      ? `${escapeHtml(item.description)} <span class="badge">${capitalize(item.category)}</span>`
+      : escapeHtml(item.product_name);
+
+    const qtyStr = item.quantity ? `${item.quantity}${item.unit || ""}` : (item.type === 'oneoff' ? "—" : null);
     const detail = [qtyStr, item.notes].filter(Boolean).join(" · ");
-    return `<div class="cart-item" data-id="${item.id}">
+
+    // Always use array index as the removal key — renderCart re-renders fresh indices
+    // after each removal, so index remains stable during a single interaction.
+    return `<div class="cart-item" data-index="${index}">
       <div class="cart-item-info">
-        <span class="cart-item-name">${escapeHtml(item.product_name)}</span>
+        <span class="cart-item-name">${displayName}</span>
         ${detail ? `<span class="cart-item-detail">${escapeHtml(detail)}</span>` : ""}
       </div>
       <div class="cart-item-right">
         <span class="cart-item-price">€${item.price_total.toFixed(2)}</span>
-        <button class="cart-remove-btn" data-id="${item.id}" aria-label="Remove">×</button>
+        <button class="cart-remove-btn" data-index="${index}" aria-label="Remove">×</button>
       </div>
     </div>`;
   }).join("");
 
   cartItems.querySelectorAll(".cart-remove-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      cart = cart.filter(item => item.id !== btn.dataset.id);
+      const index = parseInt(btn.dataset.index);
+      if (!isNaN(index) && index >= 0 && index < cart.length) {
+        cart.splice(index, 1);
+      }
       renderCart();
     });
   });

@@ -39,7 +39,7 @@ from psycopg.errors import ForeignKeyViolation
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -180,7 +180,7 @@ class ProductIn(BaseModel):
     carbs_per_100g: float | None = Field(None, ge=0, le=100)
     fat_per_100g: float | None = Field(None, ge=0, le=100)
     notes: str | None = Field(None, max_length=1000)
-    category: Literal['grocery','alcohol','nicotine','event','badminton','travel','other'] = 'grocery'
+    category: Literal['grocery','alcohol','nicotine','event','badminton','travel','restaurant','other'] = 'grocery'
     unit: Literal['g','mL'] | None = None
     presets: list[PresetModel] = Field(default_factory=list, max_length=4)
 
@@ -209,17 +209,25 @@ class ProductUpdate(BaseModel):
     carbs_per_100g: float | None = Field(None, ge=0, le=100)
     fat_per_100g: float | None = Field(None, ge=0, le=100)
     notes: str | None = Field(None, max_length=1000)
-    category: Literal['grocery','alcohol','nicotine','event','badminton','travel','other'] | None = None
+    category: Literal['grocery','alcohol','nicotine','event','badminton','travel','restaurant','other'] | None = None
     unit: Literal['g','mL'] | None = None
     presets: list[PresetModel] | None = Field(None, max_length=4)
 
 
 class PurchaseItemIn(BaseModel):
     """One item in a batch purchase."""
-    product_id: int
+    product_id: int | None = None
+    description: str | None = Field(None, max_length=500)
+    category: Literal['grocery','alcohol','nicotine','event','badminton','travel','restaurant','other'] | None = None
     quantity: float | None = Field(None, gt=0, le=100000)
     price_total: float = Field(..., gt=0, le=10000)
     notes: str | None = Field(None, max_length=1000)
+
+    @model_validator(mode='after')
+    def check_product_or_description(self):
+        if self.product_id is None and (self.description is None or self.category is None):
+            raise ValueError('Either product_id or both description and category must be provided')
+        return self
 
 
 class BatchPurchaseIn(BaseModel):
@@ -231,25 +239,34 @@ class BatchPurchaseIn(BaseModel):
 
 class PurchaseIn(BaseModel):
     """Purchase creation request model."""
-    product_id: int
+    product_id: int | None = None
+    description: str | None = Field(None, max_length=500)
+    category: Literal['grocery','alcohol','nicotine','event','badminton','travel','restaurant','other'] | None = None
     store_id: int | None = None
     date: _Date
     quantity: float | None = Field(None, gt=0, le=100000)
     price_total: float = Field(..., gt=0, le=10000)
     notes: str | None = Field(None, max_length=1000)
 
+    @model_validator(mode='after')
+    def check_product_or_description(self):
+        if self.product_id is None and (self.description is None or self.category is None):
+            raise ValueError('Either product_id or both description and category must be provided')
+        return self
+
 
 class PurchaseOut(BaseModel):
     """Purchase response model."""
     id: int
-    product_id: int
-    product_name: str
+    product_id: int | None
+    product_name: str | None
     store_id: int | None
     store_name: str | None
     category: str
     date: _Date
     quantity: float | None
     price_total: float
+    description: str | None
     notes: str | None
     created_at: str
 
@@ -257,6 +274,8 @@ class PurchaseOut(BaseModel):
 class PurchaseUpdate(BaseModel):
     """Purchase update request model (all fields optional)."""
     product_id: int | None = None
+    description: str | None = Field(None, max_length=500)
+    category: Literal['grocery','alcohol','nicotine','event','badminton','travel','restaurant','other'] | None = None
     store_id: int | None = None
     date: _Date | None = None
     quantity: float | None = Field(None, gt=0, le=100000)
@@ -553,47 +572,65 @@ def create_purchases_batch(request: Request, batch: BatchPurchaseIn):
                     if cur.fetchone() is None:
                         raise HTTPException(status_code=404, detail="Store not found")
 
+                # Fetch store name once
+                store_name = None
+                if batch.store_id is not None:
+                    cur.execute("SELECT name FROM stores WHERE id = %s", (batch.store_id,))
+                    store_row = cur.fetchone()
+                    store_name = store_row[0] if store_row else None
+
                 results = []
                 for item in batch.items:
-                    # Validate product
-                    cur.execute("SELECT name, category FROM products WHERE id = %s", (item.product_id,))
-                    product_row = cur.fetchone()
-                    if product_row is None:
-                        raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
-                    product_name, category = product_row
+                    product_name = None
+                    category = None
+
+                    if item.product_id is not None:
+                        # Validate product
+                        cur.execute("SELECT name, category FROM products WHERE id = %s", (item.product_id,))
+                        product_row = cur.fetchone()
+                        if product_row is None:
+                            raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
+                        product_name = product_row[0]
+                        category = product_row[1]
+                    else:
+                        # One-off item
+                        product_name = None
+                        category = item.category
 
                     cur.execute(
                         """
                         INSERT INTO purchases
-                        (product_id, store_id, date, quantity, price_total, notes)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        RETURNING id, product_id, store_id, date, quantity,
+                        (product_id, description, category, store_id, date, quantity, price_total, notes)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id, product_id, description, category, store_id, date, quantity,
                                   price_total, notes, created_at
                         """,
-                        (item.product_id, batch.store_id, batch.date,
-                         item.quantity, item.price_total, item.notes),
+                        (
+                            item.product_id,
+                            item.description,
+                            item.category if item.product_id is None else None,
+                            batch.store_id,
+                            batch.date,
+                            item.quantity,
+                            item.price_total,
+                            item.notes,
+                        ),
                     )
                     row = cur.fetchone()
-
-                    # Fetch store name
-                    store_name = None
-                    if batch.store_id is not None:
-                        cur.execute("SELECT name FROM stores WHERE id = %s", (batch.store_id,))
-                        store_row = cur.fetchone()
-                        store_name = store_row[0] if store_row else None
 
                     results.append({
                         "id": row[0],
                         "product_id": row[1],
                         "product_name": product_name,
-                        "store_id": row[2],
+                        "store_id": row[4],
                         "store_name": store_name,
                         "category": category,
-                        "date": row[3],
-                        "quantity": row[4],
-                        "price_total": row[5],
-                        "notes": row[6],
-                        "created_at": row[7].isoformat() if row[7] else None,
+                        "date": row[5],
+                        "quantity": row[6],
+                        "price_total": row[7],
+                        "description": row[2],
+                        "notes": row[8],
+                        "created_at": row[9].isoformat() if row[9] else None,
                     })
 
                 conn.commit()
@@ -608,32 +645,45 @@ def create_purchases_batch(request: Request, batch: BatchPurchaseIn):
 @app.post("/api/purchases", response_model=PurchaseOut, status_code=201)
 @limiter.limit("10/minute")
 def create_purchase(request: Request, purchase: PurchaseIn):
-    """Logs a purchase."""
+    """Logs a purchase. Either product_id or (description + category) must be provided."""
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
-                # Validate product exists.
-                cur.execute("SELECT id FROM products WHERE id = %s", (purchase.product_id,))
-                if cur.fetchone() is None:
-                    raise HTTPException(status_code=404, detail="Product not found")
+                product_name = None
+                category = None
 
-                # Validate store exists if provided.
+                if purchase.product_id is not None:
+                    # Validate product exists and get its name/category
+                    cur.execute("SELECT name, category FROM products WHERE id = %s", (purchase.product_id,))
+                    product_row = cur.fetchone()
+                    if product_row is None:
+                        raise HTTPException(status_code=404, detail="Product not found")
+                    product_name = product_row[0]
+                    category = product_row[1]
+                else:
+                    # One-off: use provided description and category
+                    product_name = None
+                    category = purchase.category
+
+                # Validate store if provided
                 if purchase.store_id is not None:
                     cur.execute("SELECT id FROM stores WHERE id = %s", (purchase.store_id,))
                     if cur.fetchone() is None:
                         raise HTTPException(status_code=404, detail="Store not found")
 
-                # Insert purchase.
+                # Insert purchase
                 cur.execute(
                     """
                     INSERT INTO purchases
-                    (product_id, store_id, date, quantity, price_total, notes)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    RETURNING id, product_id, store_id, date, quantity,
+                    (product_id, description, category, store_id, date, quantity, price_total, notes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, product_id, description, category, store_id, date, quantity,
                               price_total, notes, created_at
                     """,
                     (
                         purchase.product_id,
+                        purchase.description,
+                        purchase.category if purchase.product_id is None else None,
                         purchase.store_id,
                         purchase.date,
                         purchase.quantity,
@@ -642,42 +692,28 @@ def create_purchase(request: Request, purchase: PurchaseIn):
                     ),
                 )
                 row = cur.fetchone()
-                purchase_id = row[0]
-                product_id = row[1]
-                store_id = row[2]
 
-                # Fetch product name and category
-                cur.execute(
-                    "SELECT name, category FROM products WHERE id = %s",
-                    (product_id,),
-                )
-                product_row = cur.fetchone()
-                product_name = product_row[0]
-                category = product_row[1]
-
-                # Fetch store name if store_id exists
+                # Fetch store name if provided
                 store_name = None
-                if store_id is not None:
-                    cur.execute(
-                        "SELECT name FROM stores WHERE id = %s",
-                        (store_id,),
-                    )
+                if row[4] is not None:
+                    cur.execute("SELECT name FROM stores WHERE id = %s", (row[4],))
                     store_row = cur.fetchone()
                     store_name = store_row[0] if store_row else None
 
                 conn.commit()
                 return {
-                    "id": purchase_id,
-                    "product_id": product_id,
+                    "id": row[0],
+                    "product_id": row[1],
                     "product_name": product_name,
-                    "store_id": store_id,
+                    "store_id": row[4],
                     "store_name": store_name,
                     "category": category,
-                    "date": row[3],
-                    "quantity": row[4],
-                    "price_total": row[5],
-                    "notes": row[6],
-                    "created_at": row[7].isoformat() if row[7] else None,
+                    "date": row[5],
+                    "quantity": row[6],
+                    "price_total": row[7],
+                    "description": row[2],
+                    "notes": row[8],
+                    "created_at": row[9].isoformat() if row[9] else None,
                 }
     except HTTPException:
         raise
@@ -731,9 +767,11 @@ def get_purchases(
                 # Build and execute query with safe sort column interpolation
                 query = f"""
                     SELECT pu.id, pu.product_id, p.name, pu.store_id, s.name,
-                           p.category, pu.date, pu.quantity, pu.price_total, pu.notes, pu.created_at
+                           COALESCE(p.category, pu.category) AS category,
+                           pu.date, pu.quantity, pu.price_total, pu.notes, pu.created_at,
+                           pu.description
                     FROM purchases pu
-                    JOIN products p ON p.id = pu.product_id
+                    LEFT JOIN products p ON p.id = pu.product_id
                     LEFT JOIN stores s ON s.id = pu.store_id
                     {where_clause}
                     ORDER BY {sort_column} {sort_direction}
@@ -754,6 +792,7 @@ def get_purchases(
                         "price_total": row[8],
                         "notes": row[9],
                         "created_at": row[10].isoformat() if row[10] else None,
+                        "description": row[11],
                     }
                     for row in rows
                 ]
@@ -820,11 +859,11 @@ def get_dashboard_categories(
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT p.category, SUM(pu.price_total)
+                    SELECT COALESCE(p.category, pu.category) AS category, SUM(pu.price_total)
                     FROM purchases pu
-                    JOIN products p ON p.id = pu.product_id
+                    LEFT JOIN products p ON p.id = pu.product_id
                     WHERE pu.date >= %s AND pu.date < %s
-                    GROUP BY p.category
+                    GROUP BY COALESCE(p.category, pu.category)
                     ORDER BY SUM(pu.price_total) DESC
                     """,
                     (first_day, next_month_first_day),
@@ -1017,6 +1056,12 @@ def update_purchase(request: Request, purchase_id: int, purchase_update: Purchas
                 if "product_id" in fields_set:
                     update_fields.append("product_id = %s")
                     update_values.append(purchase_update.product_id)
+                if "description" in fields_set:
+                    update_fields.append("description = %s")
+                    update_values.append(purchase_update.description)
+                if "category" in fields_set:
+                    update_fields.append("category = %s")
+                    update_values.append(purchase_update.category)
                 if "store_id" in fields_set:
                     update_fields.append("store_id = %s")
                     update_values.append(purchase_update.store_id)
@@ -1033,18 +1078,19 @@ def update_purchase(request: Request, purchase_id: int, purchase_update: Purchas
                     update_fields.append("notes = %s")
                     update_values.append(purchase_update.notes)
 
-                # If no fields were provided, return the existing purchase
-                if not update_fields:
+                def build_purchase_response(cur, purchase_id_val):
                     cur.execute(
                         """
                         SELECT pu.id, pu.product_id, p.name, pu.store_id, s.name,
-                               p.category, pu.date, pu.quantity, pu.price_total, pu.notes, pu.created_at
+                               COALESCE(p.category, pu.category) AS category,
+                               pu.date, pu.quantity, pu.price_total, pu.notes, pu.created_at,
+                               pu.description
                         FROM purchases pu
-                        JOIN products p ON p.id = pu.product_id
+                        LEFT JOIN products p ON p.id = pu.product_id
                         LEFT JOIN stores s ON s.id = pu.store_id
                         WHERE pu.id = %s
                         """,
-                        (purchase_id,)
+                        (purchase_id_val,)
                     )
                     row = cur.fetchone()
                     return {
@@ -1059,7 +1105,12 @@ def update_purchase(request: Request, purchase_id: int, purchase_update: Purchas
                         "price_total": row[8],
                         "notes": row[9],
                         "created_at": row[10].isoformat() if row[10] else None,
+                        "description": row[11],
                     }
+
+                # If no fields were provided, return the existing purchase
+                if not update_fields:
+                    return build_purchase_response(cur, purchase_id)
 
                 # Execute UPDATE
                 update_values.append(purchase_id)
@@ -1067,46 +1118,11 @@ def update_purchase(request: Request, purchase_id: int, purchase_update: Purchas
                     UPDATE purchases
                     SET {', '.join(update_fields)}
                     WHERE id = %s
-                    RETURNING id, product_id, store_id, date, quantity, price_total, notes, created_at
                 """
                 cur.execute(query, update_values)
-                row = cur.fetchone()
-
-                # Fetch product and store details for response
-                product_id = row[1]
-                store_id = row[2]
-
-                cur.execute(
-                    "SELECT name, category FROM products WHERE id = %s",
-                    (product_id,)
-                )
-                product_row = cur.fetchone()
-                product_name = product_row[0]
-                category = product_row[1]
-
-                store_name = None
-                if store_id is not None:
-                    cur.execute(
-                        "SELECT name FROM stores WHERE id = %s",
-                        (store_id,)
-                    )
-                    store_row = cur.fetchone()
-                    store_name = store_row[0] if store_row else None
-
                 conn.commit()
-                return {
-                    "id": row[0],
-                    "product_id": product_id,
-                    "product_name": product_name,
-                    "store_id": store_id,
-                    "store_name": store_name,
-                    "category": category,
-                    "date": row[3],
-                    "quantity": row[4],
-                    "price_total": row[5],
-                    "notes": row[6],
-                    "created_at": row[7].isoformat() if row[7] else None,
-                }
+
+                return build_purchase_response(cur, purchase_id)
     except HTTPException:
         raise
     except Exception as e:
@@ -1156,7 +1172,7 @@ def get_dashboard_macros(
                            SUM(p.carbs_per_100g / 100.0 * pu.quantity),
                            SUM(p.fat_per_100g / 100.0 * pu.quantity)
                     FROM purchases pu
-                    JOIN products p ON p.id = pu.product_id
+                    LEFT JOIN products p ON p.id = pu.product_id
                     WHERE pu.date >= %s AND pu.date <= %s
                       AND p.unit IS NOT NULL
                       AND pu.quantity IS NOT NULL

@@ -72,12 +72,22 @@ async function handleSubmitCart() {
     const payload = {
       store_id: storeSelect.value ? parseInt(storeSelect.value) : null,
       date: dateInput.value,
-      items: cart.map(item => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        price_total: item.price_total,
-        notes: item.notes,
-      })),
+      items: cart.map(item => {
+        if (item.type === 'oneoff') {
+          return {
+            description: item.description,
+            category: item.category,
+            price_total: item.price_total,
+            notes: item.notes || null,
+          };
+        }
+        return {
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price_total: item.price_total,
+          notes: item.notes,
+        };
+      }),
     };
 
     const response = await fetch(`${BACKEND_URL}/api/purchases/batch`, {
@@ -94,8 +104,13 @@ async function handleSubmitCart() {
     // Success — clear cart, show confirmation
     const count = cart.length;
     cart = [];
+    purchaseMode = 'product';
     renderCart();
     document.getElementById('purchase-preset-buttons').innerHTML = '';
+    document.getElementById('mode-product-btn').classList.add('active');
+    document.getElementById('mode-oneoff-btn').classList.remove('active');
+    document.getElementById('product-fields').classList.remove('hidden');
+    document.getElementById('oneoff-fields').classList.add('hidden');
     showSuccess("log-purchase-success", `${count} purchase${count !== 1 ? "s" : ""} logged ✓`);
     // Reset date to today for next trip
     document.getElementById("purchase-date").value = new Date().toISOString().split("T")[0];

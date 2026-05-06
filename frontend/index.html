@@ -27,7 +27,7 @@
     <ul class="drawer-nav">
       <li><button class="drawer-nav-item active" data-tab="dashboard">Dashboard</button></li>
       <li><button class="drawer-nav-item" data-tab="log-purchase">Log Purchase</button></li>
-      <li><button class="drawer-nav-item" data-tab="pantry">Pantry</button></li>
+      <li><button class="drawer-nav-item" data-tab="pantry">Products</button></li>
       <li><button class="drawer-nav-item" data-tab="stores">Stores</button></li>
     </ul>
   </nav>
@@ -57,91 +57,122 @@
       <!-- Item entry form -->
       <div class="cart-item-form">
         <h2>Add item</h2>
-        <div class="form-group">
-          <label for="purchase-product">Product</label>
-          <div class="product-select-wrapper">
-            <select id="purchase-product">
-              <option value="" disabled selected>— select a product —</option>
+        <div class="purchase-mode-toggle">
+          <button type="button" id="mode-product-btn" class="mode-btn active">Product</button>
+          <button type="button" id="mode-oneoff-btn" class="mode-btn">One-off</button>
+        </div>
+
+        <!-- One-off fields (hidden by default) -->
+        <div id="oneoff-fields" class="hidden">
+          <div class="form-group">
+            <label for="oneoff-description">Description *</label>
+            <input type="text" id="oneoff-description" placeholder="e.g. Dinner at Vapiano" maxlength="500" />
+          </div>
+          <div class="form-group">
+            <label for="oneoff-category">Category</label>
+            <select id="oneoff-category">
+              <option value="grocery">Grocery</option>
+              <option value="alcohol">Alcohol</option>
+              <option value="nicotine">Nicotine</option>
+              <option value="restaurant" selected>Restaurant</option>
+              <option value="event">Event</option>
+              <option value="badminton">Badminton</option>
+              <option value="travel">Travel</option>
+              <option value="other">Other</option>
             </select>
-            <button type="button" id="new-product-toggle" class="link-button">＋ New</button>
           </div>
         </div>
 
-        <!-- Inline new product form (unchanged from before) -->
-        <div id="new-product-form-container" class="new-product-form-container hidden">
-          <fieldset class="new-product-form">
-            <legend>Add a new product</legend>
-            <div class="form-group">
-              <label for="new-product-name">Name *</label>
-              <input type="text" id="new-product-name" placeholder="e.g. Pasta" required />
-            </div>
-            <div class="form-group">
-              <label for="new-product-brand">Brand</label>
-              <input type="text" id="new-product-brand" placeholder="optional" />
-            </div>
-            <div class="form-group">
-              <label for="new-product-category">Category</label>
-              <select id="new-product-category" required>
-                <option value="grocery">Grocery</option>
-                <option value="alcohol">Alcohol</option>
-                <option value="nicotine">Nicotine</option>
-                <option value="event">Event</option>
-                <option value="badminton">Badminton</option>
-                <option value="travel">Travel</option>
-                <option value="other">Other</option>
+        <!-- Product fields (shown by default) -->
+        <div id="product-fields">
+          <div class="form-group">
+            <label for="purchase-product">Product</label>
+            <div class="product-select-wrapper">
+              <select id="purchase-product">
+                <option value="" disabled selected>— select a product —</option>
               </select>
+              <button type="button" id="new-product-toggle" class="link-button">＋ New</button>
             </div>
-            <div class="form-group" id="new-product-unit-group">
-              <label for="new-product-unit">Unit <span class="field-hint">(for nutrition tracking)</span></label>
-              <select id="new-product-unit">
-                <option value="">— none —</option>
-                <option value="g">g (grams)</option>
-                <option value="mL">mL (millilitres)</option>
-              </select>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="new-product-calories">Calories/100g</label>
-                <input type="number" id="new-product-calories" min="0" step="0.1" placeholder="e.g. 300" />
-              </div>
-              <div class="form-group">
-                <label for="new-product-protein">Protein/100g</label>
-                <input type="number" id="new-product-protein" min="0" step="0.1" placeholder="e.g. 10" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="new-product-carbs">Carbs/100g</label>
-                <input type="number" id="new-product-carbs" min="0" step="0.1" placeholder="e.g. 65" />
-              </div>
-              <div class="form-group">
-                <label for="new-product-fat">Fat/100g</label>
-                <input type="number" id="new-product-fat" min="0" step="0.1" placeholder="e.g. 1" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="new-product-notes">Notes</label>
-              <textarea id="new-product-notes" placeholder="optional"></textarea>
-            </div>
-            <div class="form-group preset-section hidden" id="new-product-preset-section">
-              <label>Quantity Presets <span class="field-hint">(tap to fill quantity field)</span></label>
-              <div id="new-product-preset-rows"></div>
-              <button type="button" id="new-product-add-preset-btn" class="link-button">＋ Add preset</button>
-            </div>
-            <div class="button-group">
-              <button type="button" id="save-new-product" class="btn-primary">Save product</button>
-              <button type="button" id="cancel-new-product" class="btn-secondary">Cancel</button>
-            </div>
-            <div id="new-product-error" class="error-message"></div>
-          </fieldset>
-        </div>
+          </div>
 
-        <div class="form-group" id="purchase-quantity-group">
-          <label for="purchase-quantity">Quantity (<span id="purchase-quantity-unit">g</span>)</label>
-          <input type="number" id="purchase-quantity" min="0.1" step="0.1" placeholder="e.g. 600" />
-        </div>
+          <!-- Inline new product form (unchanged from before) -->
+          <div id="new-product-form-container" class="new-product-form-container hidden">
+            <fieldset class="new-product-form">
+              <legend>Add a new product</legend>
+              <div class="form-group">
+                <label for="new-product-name">Name *</label>
+                <input type="text" id="new-product-name" placeholder="e.g. Pasta" required />
+              </div>
+              <div class="form-group">
+                <label for="new-product-brand">Brand</label>
+                <input type="text" id="new-product-brand" placeholder="optional" />
+              </div>
+              <div class="form-group">
+                <label for="new-product-category">Category</label>
+                <select id="new-product-category" required>
+                  <option value="grocery">Grocery</option>
+                  <option value="alcohol">Alcohol</option>
+                  <option value="nicotine">Nicotine</option>
+                  <option value="restaurant">Restaurant</option>
+                  <option value="event">Event</option>
+                  <option value="badminton">Badminton</option>
+                  <option value="travel">Travel</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="form-group" id="new-product-unit-group">
+                <label for="new-product-unit">Unit <span class="field-hint">(for nutrition tracking)</span></label>
+                <select id="new-product-unit">
+                  <option value="">— none —</option>
+                  <option value="g">g (grams)</option>
+                  <option value="mL">mL (millilitres)</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="new-product-calories">Calories/100g</label>
+                  <input type="number" id="new-product-calories" min="0" step="0.1" placeholder="e.g. 300" />
+                </div>
+                <div class="form-group">
+                  <label for="new-product-protein">Protein/100g</label>
+                  <input type="number" id="new-product-protein" min="0" step="0.1" placeholder="e.g. 10" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="new-product-carbs">Carbs/100g</label>
+                  <input type="number" id="new-product-carbs" min="0" step="0.1" placeholder="e.g. 65" />
+                </div>
+                <div class="form-group">
+                  <label for="new-product-fat">Fat/100g</label>
+                  <input type="number" id="new-product-fat" min="0" step="0.1" placeholder="e.g. 1" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="new-product-notes">Notes</label>
+                <textarea id="new-product-notes" placeholder="optional"></textarea>
+              </div>
+              <div class="form-group preset-section hidden" id="new-product-preset-section">
+                <label>Quantity Presets <span class="field-hint">(tap to fill quantity field)</span></label>
+                <div id="new-product-preset-rows"></div>
+                <button type="button" id="new-product-add-preset-btn" class="link-button">＋ Add preset</button>
+              </div>
+              <div class="button-group">
+                <button type="button" id="save-new-product" class="btn-primary">Save product</button>
+                <button type="button" id="cancel-new-product" class="btn-secondary">Cancel</button>
+              </div>
+              <div id="new-product-error" class="error-message"></div>
+            </fieldset>
+          </div>
 
-        <div id="purchase-preset-buttons" class="preset-buttons-container"></div>
+          <div class="form-group" id="purchase-quantity-group">
+            <label for="purchase-quantity">Quantity (<span id="purchase-quantity-unit">g</span>)</label>
+            <input type="number" id="purchase-quantity" min="0.1" step="0.1" placeholder="e.g. 600" />
+          </div>
+
+          <div id="purchase-preset-buttons" class="preset-buttons-container"></div>
+        </div>
+        <!-- end product-fields -->
 
         <div class="form-group">
           <label for="purchase-price">Total price (€)</label>
@@ -190,6 +221,7 @@
               <option value="grocery">Grocery</option>
               <option value="alcohol">Alcohol</option>
               <option value="nicotine">Nicotine</option>
+              <option value="restaurant">Restaurant</option>
               <option value="event">Event</option>
               <option value="badminton">Badminton</option>
               <option value="travel">Travel</option>
@@ -238,7 +270,7 @@
       </div>
 
       <!-- Product list -->
-      <h2>Products in pantry</h2>
+      <h2>Products</h2>
       <div id="pantry-products" class="pantry-products-list"></div>
     </section>
 

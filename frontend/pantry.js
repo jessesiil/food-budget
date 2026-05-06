@@ -132,8 +132,10 @@ function openEditProductModal(productId) {
           <option value="grocery" ${product.category === 'grocery' ? 'selected' : ''}>Grocery</option>
           <option value="alcohol" ${product.category === 'alcohol' ? 'selected' : ''}>Alcohol</option>
           <option value="nicotine" ${product.category === 'nicotine' ? 'selected' : ''}>Nicotine</option>
+          <option value="restaurant" ${product.category === 'restaurant' ? 'selected' : ''}>Restaurant</option>
           <option value="event" ${product.category === 'event' ? 'selected' : ''}>Event</option>
           <option value="badminton" ${product.category === 'badminton' ? 'selected' : ''}>Badminton</option>
+          <option value="travel" ${product.category === 'travel' ? 'selected' : ''}>Travel</option>
           <option value="other" ${product.category === 'other' ? 'selected' : ''}>Other</option>
         </select>
       </div>

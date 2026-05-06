@@ -43,7 +43,7 @@ insert into stores (name) values
 -- Each row represents a unique product. The combination of name and brand uniquely
 -- identifies a product (e.g., "Milk" from "Campina" vs "Albert Heijn brand").
 --
--- category: Product category (grocery, alcohol, nicotine, event, badminton, other).
+-- category: Product category (grocery, alcohol, nicotine, event, badminton, travel, restaurant, other).
 -- Defaults to 'grocery'. Used for purchasing and dietary tracking.
 --
 -- unit: Measurement unit for this product (g = grams, mL = millilitres), or null for
@@ -112,3 +112,22 @@ create table if not exists purchases (
 -- Format: [{"quantity": number, "label": string}, ...]
 -- Max 4 entries. Validation enforced in backend.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS presets JSONB NOT NULL DEFAULT '[]';
+
+-- T-022: Fix category constraint to include 'travel' (was missing) and add 'restaurant'
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_check;
+ALTER TABLE products ADD CONSTRAINT products_category_check
+  CHECK (category IN ('grocery','alcohol','nicotine','event','badminton','travel','restaurant','other'));
+
+-- T-023: One-off purchases
+-- Makes product_id nullable so purchases can exist without a linked product.
+-- Adds description (for one-off item name) and category (for one-off categorisation).
+-- Constraint ensures every purchase has either a linked product OR a description+category.
+ALTER TABLE purchases ALTER COLUMN product_id DROP NOT NULL;
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS category TEXT
+  CHECK (category IN ('grocery','alcohol','nicotine','event','badminton','travel','restaurant','other'));
+ALTER TABLE purchases ADD CONSTRAINT purchases_product_or_description
+  CHECK (
+    product_id IS NOT NULL
+    OR (description IS NOT NULL AND category IS NOT NULL)
+  );
