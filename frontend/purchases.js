@@ -47,6 +47,7 @@ function setupPurchaseForm() {
     document.getElementById("mode-oneoff-btn").classList.remove("active");
     document.getElementById("product-fields").classList.remove("hidden");
     document.getElementById("oneoff-fields").classList.add("hidden");
+    document.getElementById("purchase-store-group").classList.remove("hidden");
   });
 
   document.getElementById("mode-oneoff-btn").addEventListener("click", () => {
@@ -55,6 +56,7 @@ function setupPurchaseForm() {
     document.getElementById("mode-product-btn").classList.remove("active");
     document.getElementById("oneoff-fields").classList.remove("hidden");
     document.getElementById("product-fields").classList.add("hidden");
+    document.getElementById("purchase-store-group").classList.add("hidden");
   });
 }
 

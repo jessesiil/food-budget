@@ -281,6 +281,11 @@ textarea {
   border-radius: 4px;
 }
 
+/* Generic hidden utility */
+.hidden {
+  display: none;
+}
+
 .new-product-form-container.hidden {
   display: none;
 }
