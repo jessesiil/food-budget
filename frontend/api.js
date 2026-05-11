@@ -430,15 +430,10 @@ async function loadDashboardSpend() {
     const sevenDayData = await sevenDayResponse.json();
     renderSpendChart(sevenDayData);
 
-    // Fetch monthly total to display in the Purchases panel header
+    // Fetch monthly total — used only for the days count (avg/day in categories panel)
     const monthResponse = await fetch(`${BACKEND_URL}/api/dashboard/spend?month=${dashboardMonth}`);
     if (monthResponse.ok) {
       const monthData = await monthResponse.json();
-      const totalEl = document.getElementById("dashboard-spend-month-total");
-      if (totalEl) {
-        const total = monthData.total != null ? parseFloat(monthData.total).toFixed(2) : "0.00";
-        totalEl.textContent = `Spend this month: €${total}`;
-      }
       // Return days count so categories avg can use it
       return monthData.days ? monthData.days.length : 0;
     }
@@ -491,6 +486,16 @@ async function loadDashboardPurchases() {
     renderDashboardPurchases(data);
     updateDashboardSortIndicators();
     populateDashboardFilters(data);
+
+    // Update the monthly total to reflect current filter state
+    const hasFilter = !!categoryFilter || !!storeFilter;
+    const filteredTotal = data.reduce((sum, p) => sum + parseFloat(p.price_total), 0);
+    const totalEl = document.getElementById("dashboard-spend-month-total");
+    if (totalEl) {
+      totalEl.textContent = hasFilter
+        ? `Filtered spend: €${filteredTotal.toFixed(2)}`
+        : `Spend this month: €${filteredTotal.toFixed(2)}`;
+    }
   } catch (err) {
     showError("dashboard-error", `Error loading purchases: ${err.message}`);
   }

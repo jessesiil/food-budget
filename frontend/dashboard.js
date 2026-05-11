@@ -268,13 +268,14 @@ function renderSpendChart(data) {
   const ctx = canvas.getContext("2d");
   spendChart = new Chart(ctx, {
     type: "bar",
+    devicePixelRatio: window.devicePixelRatio || 1,
     data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: true,
       interaction: {
         mode: "index",
-        axis: "x",
+        intersect: false,
       },
       plugins: {
         legend: {
@@ -337,6 +338,7 @@ function renderCategoriesChart(data) {
   const ctx = document.getElementById("dashboard-categories-canvas").getContext("2d");
   categoryChart = new Chart(ctx, {
     type: "bar",
+    devicePixelRatio: window.devicePixelRatio || 1,
     data: {
       labels: labels,
       datasets: [
@@ -354,8 +356,8 @@ function renderCategoriesChart(data) {
       responsive: true,
       maintainAspectRatio: true,
       interaction: {
-        mode: "index",
-        axis: "y",
+        mode: "nearest",
+        intersect: false,
       },
       plugins: {
         legend: {
