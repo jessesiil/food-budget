@@ -431,6 +431,34 @@ textarea {
   display: block;
 }
 
+/* Mode toggle pill */
+.purchase-mode-toggle {
+  display: inline-flex;
+  background: #f3f4f6;
+  border-radius: 9999px;
+  padding: 3px;
+  gap: 0;
+  margin-bottom: 1rem;
+}
+
+.mode-btn {
+  padding: 0.35rem 1.1rem;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-btn.active {
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
 /* Pantry section */
 .pantry-add-product {
   background: white;
@@ -443,6 +471,15 @@ textarea {
 .pantry-add-product h2 {
   margin: 0 0 16px 0;
   font-size: 1.1rem;
+}
+
+.pantry-form-toggle-btn {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+#pantry-form-container {
+  margin-top: 16px;
 }
 
 .pantry-products-list {
@@ -1226,4 +1263,21 @@ h2 {
   .categories-chart-container {
     margin-bottom: 0;
   }
+}
+
+/* Dashboard monthly total text (Purchases panel) */
+.dashboard-monthly-total {
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+  min-height: 1.4em;
+}
+
+/* Dashboard avg/day summary (Categories panel) */
+.dashboard-avg-summary {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-top: 10px;
+  line-height: 1.5;
 }

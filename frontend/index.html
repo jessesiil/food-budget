@@ -205,7 +205,8 @@
 
       <!-- Pantry add product form -->
       <div class="pantry-add-product">
-        <h2>Add a new product</h2>
+        <button type="button" id="pantry-form-toggle" class="pantry-form-toggle-btn btn-secondary btn-large">＋ Add a new product</button>
+        <div id="pantry-form-container" class="hidden">
         <form id="pantry-product-form">
           <div class="form-group">
             <label for="pantry-product-name">Name *</label>
@@ -267,6 +268,7 @@
           </div>
           <button type="submit" id="pantry-submit" class="btn-primary btn-large">Add product</button>
         </form>
+        </div>
       </div>
 
       <!-- Product list -->
@@ -299,10 +301,10 @@
         <!-- Spend panel (Spend tab on mobile, left side of Charts tab on laptop) -->
         <div id="dashboard-spend" class="dashboard-tab-content active">
           <div class="spend-chart-container">
-            <h3 id="dashboard-spend-title">Spending — May 2026</h3>
+            <h3 id="dashboard-spend-title">Last 7 days</h3>
             <canvas id="dashboard-spend-canvas"></canvas>
-            <div id="dashboard-spend-empty" class="dashboard-empty-state" style="display:none">No purchases recorded for this month</div>
-            <div id="dashboard-spend-total" class="dashboard-total">Total: €0.00</div>
+            <div id="dashboard-spend-empty" class="dashboard-empty-state" style="display:none">No purchases in the last 7 days</div>
+            <div id="dashboard-spend-total" class="dashboard-total" style="display:none"></div>
           </div>
         </div>
 
@@ -312,12 +314,14 @@
             <h3 id="dashboard-categories-title">By Category — May 2026</h3>
             <canvas id="dashboard-categories-canvas"></canvas>
             <div id="dashboard-categories-empty" class="dashboard-empty-state" style="display:none">No purchases recorded for this month</div>
+            <div id="dashboard-categories-avg" class="dashboard-avg-summary"></div>
           </div>
         </div>
       </div>
 
       <!-- Purchases panel (Purchases tab on mobile/laptop) -->
       <div id="dashboard-purchases" class="dashboard-tab-content">
+        <div id="dashboard-spend-month-total" class="dashboard-monthly-total"></div>
         <div class="purchases-filter-bar">
           <select id="dashboard-filter-category" class="dashboard-filter-select">
             <option value="">All categories</option>

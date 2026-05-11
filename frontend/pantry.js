@@ -6,6 +6,14 @@ function setupPantryForm() {
   const form = document.getElementById("pantry-product-form");
   form.addEventListener("submit", (e) => handlePantryProductSubmit(e));
 
+  // Collapsible form toggle
+  const toggleBtn = document.getElementById("pantry-form-toggle");
+  const formContainer = document.getElementById("pantry-form-container");
+  toggleBtn.addEventListener("click", () => {
+    const isHidden = formContainer.classList.toggle("hidden");
+    toggleBtn.textContent = isHidden ? "＋ Add a new product" : "✕ Close form";
+  });
+
   // Handle unit change — show/hide preset section
   document.getElementById("pantry-product-unit").addEventListener("change", function() {
     const presetSection = document.getElementById("pantry-preset-section");

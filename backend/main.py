@@ -22,6 +22,7 @@ Phase 1 endpoints (product + purchase management):
 - GET    /api/dashboard/spend     : daily spend totals for a month
 - GET    /api/dashboard/categories: spend by category for a month
 - GET    /api/dashboard/macros    : daily macro totals (protein, carbs, fat) for a week
+- GET    /api/dashboard/spend-7day: daily spend by category for rolling last 7 days
 """
 
 from __future__ import annotations
@@ -331,6 +332,24 @@ class DashboardMacrosOut(BaseModel):
     week_end: str
     days: list[DailyMacroOut]
     totals: MacroTotalsOut
+
+
+class CategoryAmountOut(BaseModel):
+    """Category + amount entry for the 7-day spend breakdown."""
+    category: str
+    amount: float
+
+
+class DaySpend7Out(BaseModel):
+    """Single day entry for the 7-day spend endpoint."""
+    date: str
+    categories: list[CategoryAmountOut]
+
+
+class DashboardSpend7DayOut(BaseModel):
+    """Response model for GET /api/dashboard/spend-7day."""
+    days: list[DaySpend7Out]
+    all_categories: list[str]
 
 
 @contextmanager
@@ -1237,4 +1256,62 @@ def get_dashboard_macros(
         raise
     except Exception as e:
         logger.error("Unexpected error in get_dashboard_macros: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/dashboard/spend-7day", response_model=DashboardSpend7DayOut)
+@limiter.limit("30/minute")
+def get_dashboard_spend_7day(request: Request):
+    """Returns daily spend broken down by category for the last 7 rolling days."""
+    try:
+        today = _Date.today()
+        start_date = today - timedelta(days=6)
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT date::text, COALESCE(p.category, pu.category) AS category,
+                           SUM(pu.price_total) AS amount
+                    FROM purchases pu
+                    LEFT JOIN products p ON p.id = pu.product_id
+                    WHERE pu.date >= %s AND pu.date <= %s
+                    GROUP BY date, COALESCE(p.category, pu.category)
+                    ORDER BY date
+                    """,
+                    (start_date.isoformat(), today.isoformat()),
+                )
+                rows = cur.fetchall()
+
+        # Group rows by date into a dict: {date_str: {category: amount}}
+        spend_by_date: dict[str, dict[str, float]] = {}
+        all_cats: set[str] = set()
+        for date_str, category, amount in rows:
+            if date_str not in spend_by_date:
+                spend_by_date[date_str] = {}
+            spend_by_date[date_str][category] = float(amount)
+            all_cats.add(category)
+
+        # Build a full 7-day skeleton so every day is represented
+        days_out: list[dict] = []
+        for i in range(7):
+            day = start_date + timedelta(days=i)
+            date_str = day.isoformat()
+            cats_for_day = spend_by_date.get(date_str, {})
+            days_out.append({
+                "date": date_str,
+                "categories": [
+                    {"category": cat, "amount": amt}
+                    for cat, amt in cats_for_day.items()
+                ],
+            })
+
+        return {
+            "days": days_out,
+            "all_categories": sorted(all_cats),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in get_dashboard_spend_7day: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

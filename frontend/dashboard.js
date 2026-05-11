@@ -153,8 +153,7 @@ function updateDashboardMonthLabel() {
   const monthName = date.toLocaleString("en-US", { month: "long", year: "numeric" });
   document.getElementById("dashboard-current-month").textContent = monthName;
 
-  // Update chart titles
-  document.getElementById("dashboard-spend-title").textContent = `Spending — ${monthName}`;
+  // Only update the categories title — spend panel now shows rolling 7 days
   document.getElementById("dashboard-categories-title").textContent = `By Category — ${monthName}`;
 }
 
@@ -193,9 +192,11 @@ function switchDashboardTab(tabName) {
 async function loadDashboardData() {
   clearError("dashboard-error");
   try {
+    // loadDashboardSpend returns the number of days with purchases in the selected month,
+    // which loadDashboardCategories uses for the avg/day summary.
+    const spendDaysCount = await loadDashboardSpend();
     await Promise.all([
-      loadDashboardSpend(),
-      loadDashboardCategories(),
+      loadDashboardCategories(spendDaysCount),
       loadDashboardPurchases()
     ]);
   } catch (err) {
@@ -203,87 +204,106 @@ async function loadDashboardData() {
   }
 }
 
+// Fixed colour palette for spend-7day stacked bar chart
+const CATEGORY_COLORS = {
+  grocery:    "#16a34a",
+  restaurant: "#ea580c",
+  alcohol:    "#7c3aed",
+  event:      "#0891b2",
+  badminton:  "#d97706",
+  travel:     "#6b7280",
+  nicotine:   "#dc2626",
+  other:      "#9ca3af",
+};
+
+function getCategoryColor(category) {
+  return CATEGORY_COLORS[category] || "#9ca3af";
+}
+
 function renderSpendChart(data) {
   const emptyDiv = document.getElementById("dashboard-spend-empty");
   const canvas = document.getElementById("dashboard-spend-canvas");
   const totalDiv = document.getElementById("dashboard-spend-total");
 
-  if (!data || !data.days || data.days.length === 0) {
-    emptyDiv.style.display = "block";
-    canvas.style.display = "none";
-    totalDiv.style.display = "none";
-    if (spendChart) {
-      spendChart.destroy();
-      spendChart = null;
-    }
-    totalDiv.textContent = "Total: €0.00";
-    return;
-  }
-
-  // Show chart and total, hide empty state
-  emptyDiv.style.display = "none";
-  canvas.style.display = "block";
-  totalDiv.style.display = "block";
-
-  // Calculate cumulative spend and prepare labels
-  let cumulative = 0;
-  const labels = [];
-  const chartData = [];
-
-  data.days.forEach((item) => {
-    labels.push(item.date);
-    cumulative += parseFloat(item.amount);
-    chartData.push(cumulative);
-  });
-
-  // Calculate total
-  const total = cumulative.toFixed(2);
-  document.getElementById("dashboard-spend-total").textContent = `Total: €${total}`;
-
   // Destroy old chart if exists
   if (spendChart) {
     spendChart.destroy();
+    spendChart = null;
   }
 
-  const ctx = document.getElementById("dashboard-spend-canvas").getContext("2d");
+  // Check if there is any spend in the 7-day window
+  const hasData = data && data.days && data.days.some(d => d.categories && d.categories.length > 0);
+
+  if (!hasData) {
+    emptyDiv.style.display = "block";
+    canvas.style.display = "none";
+    totalDiv.style.display = "none";
+    return;
+  }
+
+  emptyDiv.style.display = "none";
+  canvas.style.display = "block";
+  totalDiv.style.display = "none"; // total is shown in Purchases panel header instead
+
+  // Build labels: "Mon 5", "Tue 6", etc.
+  const labels = data.days.map(d => {
+    const date = new Date(d.date + "T00:00:00");
+    return date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
+  });
+
+  // Build one dataset per category (for stacking)
+  const allCategories = data.all_categories || [];
+  const datasets = allCategories.map(cat => {
+    return {
+      label: capitalize(cat),
+      backgroundColor: getCategoryColor(cat),
+      data: data.days.map(d => {
+        const entry = d.categories.find(c => c.category === cat);
+        return entry ? parseFloat(entry.amount) : 0;
+      }),
+      stack: "spend",
+    };
+  });
+
+  const ctx = canvas.getContext("2d");
   spendChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: "Cumulative Spend (€)",
-          data: chartData,
-          borderColor: "#2563eb",
-          backgroundColor: "rgba(37, 99, 235, 0.1)",
-          tension: 0.3,
-          fill: true,
-          pointRadius: 4,
-          pointBackgroundColor: "#2563eb",
-          pointBorderColor: "#fff",
-          pointBorderWidth: 2
-        }
-      ]
-    },
+    type: "bar",
+    data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: true,
+      interaction: {
+        mode: "index",
+        axis: "x",
+      },
       plugins: {
         legend: {
-          display: true
-        }
+          display: allCategories.length > 1,
+          position: "bottom",
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const val = ctx.parsed.y;
+              const formatted = Number.isInteger(val) ? val.toFixed(0) : val.toFixed(2);
+              return `${ctx.dataset.label}: €${formatted}`;
+            },
+          },
+        },
       },
       scales: {
+        x: { stacked: true },
         y: {
+          stacked: true,
           beginAtZero: true,
           ticks: {
             callback: function(value) {
-              return "€" + value.toFixed(2);
-            }
-          }
-        }
-      }
-    }
+              return Number.isInteger(value) ? `€${value.toFixed(0)}` : `€${value.toFixed(2)}`;
+            },
+          },
+        },
+      },
+    },
   });
 }
 
@@ -333,6 +353,10 @@ function renderCategoriesChart(data) {
       indexAxis: "y",
       responsive: true,
       maintainAspectRatio: true,
+      interaction: {
+        mode: "index",
+        axis: "y",
+      },
       plugins: {
         legend: {
           display: true
@@ -343,13 +367,30 @@ function renderCategoriesChart(data) {
           beginAtZero: true,
           ticks: {
             callback: function(value) {
-              return "€" + value.toFixed(2);
+              return "€" + (Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1));
             }
+          }
+        },
+        y: {
+          ticks: {
+            autoSkip: false,
           }
         }
       }
     }
   });
+}
+
+function computeCategoriesAvgSummary(categoriesData, spendDaysCount) {
+  if (!categoriesData || !categoriesData.categories || categoriesData.categories.length === 0) {
+    return "";
+  }
+  const daysCount = spendDaysCount > 0 ? spendDaysCount : 1;
+  const parts = categoriesData.categories
+    .map(c => ({ label: capitalize(c.category), avg: parseFloat(c.amount) / daysCount }))
+    .filter(c => c.avg > 0.01)
+    .map(c => `${c.label} €${c.avg.toFixed(2)}`);
+  return parts.length > 0 ? `Avg/day: ${parts.join(" · ")}` : "";
 }
 
 function groupPurchasesByTrip(purchases) {
@@ -471,9 +512,13 @@ function renderDashboardPurchases(purchaseList) {
           const isOneoff = !item.product_id;
           const prod = isOneoff ? null : products.find(p => p.id === item.product_id);
           const unit = prod ? prod.unit : null;
-          const qtyDisplay = isOneoff ? '—' : ((item.quantity && unit)
-            ? `${parseFloat(item.quantity).toFixed(0)}${unit}`
-            : '—');
+          const qtyDisplay = isOneoff
+            ? '—'
+            : (item.quantity && unit)
+              ? `${parseFloat(item.quantity).toFixed(0)}${unit}`
+              : item.quantity
+                ? `${parseFloat(item.quantity).toFixed(0)}`
+                : '—';
           const multiplier = item.count > 1 ? ` × ${item.count}` : '';
           const productName = isOneoff
             ? `<em>${escapeHtml(item.description || 'One-off')}</em>`

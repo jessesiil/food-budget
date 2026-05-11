@@ -280,6 +280,14 @@ async function handlePantryProductSubmit(e) {
     presetRowsContainer.innerHTML = "";
     document.getElementById("pantry-preset-section").classList.add("hidden");
 
+    // Collapse form after successful submit
+    const formContainer = document.getElementById("pantry-form-container");
+    if (formContainer) {
+      formContainer.classList.add("hidden");
+      const toggleBtn = document.getElementById("pantry-form-toggle");
+      if (toggleBtn) toggleBtn.textContent = "＋ Add a new product";
+    }
+
     showSuccess("pantry-success", "Product added ✓");
     loadPantryProducts();
   } catch (err) {
@@ -414,19 +422,34 @@ async function handleDeletePurchase(purchaseId) {
 
 async function loadDashboardSpend() {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/dashboard/spend?month=${dashboardMonth}`);
-    if (!response.ok) {
-      throw new Error("Failed to load spend data");
+    // Fetch the 7-day rolling spend for the bar chart
+    const sevenDayResponse = await fetch(`${BACKEND_URL}/api/dashboard/spend-7day`);
+    if (!sevenDayResponse.ok) {
+      throw new Error("Failed to load 7-day spend data");
     }
+    const sevenDayData = await sevenDayResponse.json();
+    renderSpendChart(sevenDayData);
 
-    const data = await response.json();
-    renderSpendChart(data);
+    // Fetch monthly total to display in the Purchases panel header
+    const monthResponse = await fetch(`${BACKEND_URL}/api/dashboard/spend?month=${dashboardMonth}`);
+    if (monthResponse.ok) {
+      const monthData = await monthResponse.json();
+      const totalEl = document.getElementById("dashboard-spend-month-total");
+      if (totalEl) {
+        const total = monthData.total != null ? parseFloat(monthData.total).toFixed(2) : "0.00";
+        totalEl.textContent = `Spend this month: €${total}`;
+      }
+      // Return days count so categories avg can use it
+      return monthData.days ? monthData.days.length : 0;
+    }
+    return 0;
   } catch (err) {
     showError("dashboard-error", `Error loading spend: ${err.message}`);
+    return 0;
   }
 }
 
-async function loadDashboardCategories() {
+async function loadDashboardCategories(spendDaysCount) {
   try {
     const response = await fetch(`${BACKEND_URL}/api/dashboard/categories?month=${dashboardMonth}`);
     if (!response.ok) {
@@ -435,6 +458,12 @@ async function loadDashboardCategories() {
 
     const data = await response.json();
     renderCategoriesChart(data);
+
+    // Update avg/day summary
+    const avgEl = document.getElementById("dashboard-categories-avg");
+    if (avgEl) {
+      avgEl.textContent = computeCategoriesAvgSummary(data, spendDaysCount || 0);
+    }
   } catch (err) {
     showError("dashboard-error", `Error loading categories: ${err.message}`);
   }
