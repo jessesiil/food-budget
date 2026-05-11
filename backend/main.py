@@ -774,7 +774,7 @@ def get_purchases(
                     params.extend([first_day, next_month_first_day])
 
                 if category:
-                    where_clauses.append("p.category = %s")
+                    where_clauses.append("COALESCE(p.category, pu.category) = %s")
                     params.append(category)
 
                 if store_id is not None:
