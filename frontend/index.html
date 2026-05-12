@@ -27,6 +27,7 @@
     <ul class="drawer-nav">
       <li><button class="drawer-nav-item active" data-tab="dashboard">Dashboard</button></li>
       <li><button class="drawer-nav-item" data-tab="log-purchase">Log Purchase</button></li>
+      <li><button class="drawer-nav-item" data-tab="history">History</button></li>
       <li><button class="drawer-nav-item" data-tab="pantry">Products</button></li>
       <li><button class="drawer-nav-item" data-tab="stores">Stores</button></li>
     </ul>
@@ -85,6 +86,14 @@
 
         <!-- Product fields (shown by default) -->
         <div id="product-fields">
+          <!-- Category filter chips -->
+          <div id="product-category-chips" class="category-chips"></div>
+
+          <!-- Product search -->
+          <div class="form-group">
+            <input type="text" id="product-search" class="product-search-input" placeholder="Search products…" autocomplete="off" />
+          </div>
+
           <div class="form-group">
             <label for="purchase-product">Product</label>
             <div class="product-select-wrapper">
@@ -198,6 +207,55 @@
       </div>
     </section>
 
+    <!-- History tab -->
+    <section id="history" class="tab-content">
+      <div id="history-success" class="success-message hidden"></div>
+      <div id="history-error" class="error-message"></div>
+
+      <!-- Month selector -->
+      <div class="dashboard-month-selector">
+        <button id="history-prev-month" class="dashboard-nav-btn">‹</button>
+        <span id="history-current-month" class="dashboard-month-label"></span>
+        <button id="history-next-month" class="dashboard-nav-btn">›</button>
+      </div>
+
+      <h2 id="history-month-title"></h2>
+      <div id="history-spend-total" class="dashboard-monthly-total"></div>
+
+      <!-- Search + filter bar -->
+      <div class="purchases-filter-bar">
+        <input type="text" id="history-search" class="history-search-input" placeholder="Search products..." />
+        <select id="history-filter-category" class="dashboard-filter-select">
+          <option value="">All categories</option>
+        </select>
+        <select id="history-filter-store" class="dashboard-filter-select">
+          <option value="">All stores</option>
+        </select>
+        <button id="history-clear-filters" class="btn-secondary">Clear</button>
+      </div>
+
+      <!-- Mobile cards -->
+      <div id="history-purchases-cards" class="purchases-cards-list"></div>
+
+      <!-- Desktop table -->
+      <table class="dashboard-purchases-table history-purchases-table">
+        <thead>
+          <tr>
+            <th class="history-sortable" data-sort="date">Date <span class="sort-indicator"></span></th>
+            <th class="history-sortable" data-sort="product_name">Product <span class="sort-indicator"></span></th>
+            <th class="history-sortable" data-sort="store_name">Store <span class="sort-indicator"></span></th>
+            <th class="history-sortable" data-sort="category">Category <span class="sort-indicator"></span></th>
+            <th>Qty</th>
+            <th class="history-sortable" data-sort="price_total">Price <span class="sort-indicator"></span></th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="history-purchases-tbody"></tbody>
+      </table>
+
+      <div id="history-purchases-empty" class="dashboard-empty-state" style="display:none">No purchases for this month</div>
+    </section>
+
     <!-- Pantry tab -->
     <section id="pantry" class="tab-content">
       <div id="pantry-error" class="error-message"></div>
@@ -292,7 +350,6 @@
       <div class="dashboard-tabs">
         <button class="dashboard-tab-button active" data-dashboard-tab="spend">Spending</button>
         <button class="dashboard-tab-button" data-dashboard-tab="categories">Categories</button>
-        <button class="dashboard-tab-button" data-dashboard-tab="purchases">Purchases</button>
         <button class="dashboard-tab-button" data-dashboard-tab="nutrition">Nutrition</button>
       </div>
 
@@ -305,6 +362,7 @@
             <canvas id="dashboard-spend-canvas"></canvas>
             <div id="dashboard-spend-empty" class="dashboard-empty-state" style="display:none">No purchases in the last 7 days</div>
             <div id="dashboard-spend-total" class="dashboard-total" style="display:none"></div>
+            <div id="dashboard-spend-month-total" class="dashboard-monthly-total"></div>
           </div>
         </div>
 
@@ -317,40 +375,6 @@
             <div id="dashboard-categories-avg" class="dashboard-avg-summary"></div>
           </div>
         </div>
-      </div>
-
-      <!-- Purchases panel (Purchases tab on mobile/laptop) -->
-      <div id="dashboard-purchases" class="dashboard-tab-content">
-        <div id="dashboard-spend-month-total" class="dashboard-monthly-total"></div>
-        <div class="purchases-filter-bar">
-          <select id="dashboard-filter-category" class="dashboard-filter-select">
-            <option value="">All categories</option>
-          </select>
-          <select id="dashboard-filter-store" class="dashboard-filter-select">
-            <option value="">All stores</option>
-          </select>
-          <button id="dashboard-clear-filters" class="btn-secondary">Clear filters</button>
-        </div>
-
-        <div id="dashboard-purchases-cards" class="purchases-cards-list"></div>
-
-        <table class="dashboard-purchases-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="date">Date <span class="sort-indicator"></span></th>
-              <th class="sortable" data-sort="product_name">Product <span class="sort-indicator"></span></th>
-              <th class="sortable" data-sort="store_name">Store <span class="sort-indicator"></span></th>
-              <th class="sortable" data-sort="category">Category <span class="sort-indicator"></span></th>
-              <th class="sortable" data-sort="quantity">Qty <span class="sort-indicator"></span></th>
-              <th class="sortable" data-sort="price_total">Price <span class="sort-indicator"></span></th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="dashboard-purchases-tbody">
-          </tbody>
-        </table>
-
-        <div id="dashboard-purchases-empty" class="dashboard-empty-state">No purchases for this month</div>
       </div>
 
       <!-- Nutrition panel -->
@@ -405,6 +429,7 @@
   <script src="stores.js"></script>
   <script src="purchases.js"></script>
   <script src="dashboard.js"></script>
+  <script src="history.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

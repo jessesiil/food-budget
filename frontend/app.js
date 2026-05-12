@@ -5,6 +5,7 @@
 // Global state — shared across modules
 let products = [];
 let stores = [];
+let historyInitialized = false;
 
 // Initialize
 document.addEventListener("DOMContentLoaded", () => {
@@ -16,6 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPantryForm();
   setupStoresForm();
   setupDashboard();
+  setupHistory();
   initializeDashboard();
   renderCart();
 });

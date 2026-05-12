@@ -20,14 +20,13 @@ function renderStoresList(storeList) {
   `).join("");
 }
 
-function populateProductDropdown() {
+function populateProductDropdown(filteredProducts = null) {
+  const list = filteredProducts !== null ? filteredProducts : products;
   const select = document.getElementById("purchase-product");
-  // Clear existing (except default option)
   while (select.options.length > 1) {
     select.remove(1);
   }
-  // Add products
-  products.forEach((product) => {
+  list.forEach((product) => {
     const option = document.createElement("option");
     option.value = product.id;
     option.textContent = product.name;
@@ -40,6 +39,11 @@ function populateProductDropdown() {
 
   // Trigger change event to update quantity field visibility
   document.getElementById("purchase-product").dispatchEvent(new Event("change"));
+
+  // Re-render category chips whenever the full list is reloaded (not on filtered calls)
+  if (filteredProducts === null && typeof renderCategoryChips === 'function') {
+    renderCategoryChips();
+  }
 }
 
 function populateStoreDropdown() {

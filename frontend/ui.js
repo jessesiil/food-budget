@@ -114,6 +114,12 @@ function switchTab(tabName) {
   if (tabName === "stores") {
     loadStores();
   }
+  if (tabName === "history") {
+    if (!historyInitialized) {
+      historyInitialized = true;
+      initializeHistory();
+    }
+  }
 }
 
 // ============================================================================

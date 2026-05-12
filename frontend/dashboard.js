@@ -86,30 +86,6 @@ function setupDashboard() {
     });
   });
 
-  // Purchases filter
-  document.getElementById("dashboard-filter-category").addEventListener("change", () => {
-    loadDashboardPurchases();
-  });
-  document.getElementById("dashboard-filter-store").addEventListener("change", () => {
-    loadDashboardPurchases();
-  });
-  document.getElementById("dashboard-clear-filters").addEventListener("click", () => {
-    clearDashboardFilters();
-  });
-
-  // Purchases table sorting
-  document.querySelectorAll(".dashboard-purchases-table th.sortable").forEach((th) => {
-    th.addEventListener("click", () => {
-      const sortBy = th.dataset.sort;
-      if (dashboardCurrentSortBy === sortBy) {
-        dashboardCurrentSortDir = dashboardCurrentSortDir === "asc" ? "desc" : "asc";
-      } else {
-        dashboardCurrentSortBy = sortBy;
-        dashboardCurrentSortDir = "asc";
-      }
-      loadDashboardPurchases();
-    });
-  });
 }
 
 function initializeDashboard() {
@@ -196,8 +172,7 @@ async function loadDashboardData() {
     // which loadDashboardCategories uses for the avg/day summary.
     const spendDaysCount = await loadDashboardSpend();
     await Promise.all([
-      loadDashboardCategories(spendDaysCount),
-      loadDashboardPurchases()
+      loadDashboardCategories(spendDaysCount)
     ]);
   } catch (err) {
     showError("dashboard-error", `Error loading dashboard: ${err.message}`);
@@ -395,265 +370,10 @@ function computeCategoriesAvgSummary(categoriesData, spendDaysCount) {
   return parts.length > 0 ? `Avg/day: ${parts.join(" · ")}` : "";
 }
 
-function groupPurchasesByTrip(purchases) {
-  // Group by (date, store_id) — null store_id is its own group per date
-  const groups = {};
-
-  purchases.forEach(purchase => {
-    const key = `${purchase.date}|${purchase.store_id || 'null'}`;
-    if (!groups[key]) {
-      groups[key] = {
-        date: purchase.date,
-        store_id: purchase.store_id || null,
-        store_name: purchase.store_name || null,
-        purchases: []
-      };
-    }
-    groups[key].purchases.push(purchase);
-  });
-
-  // Convert to array and sort by date (newest first, based on current sort dir)
-  const trips = Object.values(groups);
-
-  // Sort by date based on dashboardCurrentSortDir
-  trips.sort((a, b) => {
-    const dateA = new Date(a.date).getTime();
-    const dateB = new Date(b.date).getTime();
-    return dashboardCurrentSortDir === "desc" ? dateB - dateA : dateA - dateB;
-  });
-
-  return trips;
-}
-
-function combinePurchasesByProductId(purchases) {
-  // Combine purchases with same product_id within a trip: sum qty and price
-  const combined = {};
-
-  purchases.forEach(purchase => {
-    const key = purchase.product_id;
-    if (!combined[key]) {
-      combined[key] = {
-        ...purchase,
-        count: 1,
-        quantity: purchase.quantity || 0,
-        price_total: parseFloat(purchase.price_total)
-      };
-    } else {
-      combined[key].count++;
-      combined[key].quantity += (purchase.quantity || 0);
-      combined[key].price_total += parseFloat(purchase.price_total);
-    }
-  });
-
-  return Object.values(combined);
-}
-
-function renderDashboardPurchases(purchaseList) {
-  const tbody = document.getElementById("dashboard-purchases-tbody");
-  const cardsContainer = document.getElementById("dashboard-purchases-cards");
-  const emptyState = document.getElementById("dashboard-purchases-empty");
-
-  // Store purchases in global variable for modal lookups
-  currentPurchases = purchaseList;
-
-  if (!purchaseList || purchaseList.length === 0) {
-    tbody.innerHTML = "";
-    cardsContainer.innerHTML = "";
-    emptyState.style.display = "block";
-    return;
-  }
-
-  emptyState.style.display = "none";
-
-  // Render table rows (desktop) — unchanged
-  tbody.innerHTML = purchaseList
-    .map((purchase) => {
-      const date = new Date(purchase.date).toLocaleDateString("en-GB");
-      const product = purchase.product_name
-        ? escapeHtml(purchase.product_name)
-        : `<em>${escapeHtml(purchase.description || 'One-off')}</em>`;
-      const store = purchase.store_name ? escapeHtml(purchase.store_name) : "—";
-      const category = escapeHtml(capitalize(purchase.category));
-      const qty = purchase.quantity ? parseFloat(purchase.quantity).toFixed(2) : "—";
-      const price = parseFloat(purchase.price_total).toFixed(2);
-
-      return `<tr>
-        <td>${date}</td>
-        <td>${product}</td>
-        <td>${store}</td>
-        <td>${category}</td>
-        <td>${qty}</td>
-        <td>€${price}</td>
-        <td>
-          <button class="btn-secondary btn-sm edit-purchase-btn" data-id="${purchase.id}">Edit</button>
-          <button class="btn-danger btn-sm delete-purchase-btn" data-id="${purchase.id}">Delete</button>
-        </td>
-      </tr>`;
-    })
-    .join("");
-
-  // Render grouped trip cards (mobile)
-  const trips = groupPurchasesByTrip(purchaseList);
-
-  cardsContainer.innerHTML = trips
-    .map((trip) => {
-      const dateObj = new Date(trip.date);
-      const shortDate = dateObj.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-      const storeName = trip.store_name || "No store";
-      const escapedStoreName = escapeHtml(storeName);
-
-      // Combine purchases by product_id
-      const combinedItems = combinePurchasesByProductId(trip.purchases);
-
-      // Calculate trip total
-      const tripTotal = combinedItems.reduce((sum, item) => sum + item.price_total, 0).toFixed(2);
-
-      // Render expanded items (hidden by default)
-      const itemsHtml = combinedItems
-        .map((item) => {
-          const isOneoff = !item.product_id;
-          const prod = isOneoff ? null : products.find(p => p.id === item.product_id);
-          const unit = prod ? prod.unit : null;
-          const qtyDisplay = isOneoff
-            ? '—'
-            : (item.quantity && unit)
-              ? `${parseFloat(item.quantity).toFixed(0)}${unit}`
-              : item.quantity
-                ? `${parseFloat(item.quantity).toFixed(0)}`
-                : '—';
-          const multiplier = item.count > 1 ? ` × ${item.count}` : '';
-          const productName = isOneoff
-            ? `<em>${escapeHtml(item.description || 'One-off')}</em>`
-            : escapeHtml(item.product_name);
-          const price = item.price_total.toFixed(2);
-
-          return `
-            <div class="trip-item-row">
-              <div class="trip-item-product">
-                <span>${productName}${multiplier}</span>
-              </div>
-              <div class="trip-item-qty">${qtyDisplay}</div>
-              <div class="trip-item-price">€${price}</div>
-              <div class="trip-item-actions">
-                <button class="btn-secondary btn-sm edit-purchase-btn" data-id="${item.id}">Edit</button>
-                <button class="btn-danger btn-sm delete-purchase-btn" data-id="${item.id}">Delete</button>
-              </div>
-            </div>
-          `;
-        })
-        .join("");
-
-      const itemCount = combinedItems.length;
-
-      return `
-        <div class="trip-card" data-trip-date="${trip.date}" data-trip-store="${trip.store_id || 'null'}">
-          <div class="trip-card-header">
-            <div class="trip-card-header-left">
-              <span class="trip-store-name">${escapedStoreName}</span>
-              <span class="trip-divider">·</span>
-              <span class="trip-date">${shortDate}</span>
-            </div>
-            <div class="trip-card-header-right">
-              <span class="trip-total">€${tripTotal}</span>
-              <span class="trip-chevron">›</span>
-            </div>
-          </div>
-          <div class="trip-card-summary">
-            <span>${itemCount} item${itemCount !== 1 ? 's' : ''}</span>
-          </div>
-          <div class="trip-card-items">
-            ${itemsHtml}
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  // Add event listeners for trip card toggle and action buttons
-  cardsContainer.querySelectorAll(".trip-card").forEach(card => {
-    const header = card.querySelector(".trip-card-header");
-    header.addEventListener("click", () => {
-      card.classList.toggle("expanded");
-    });
-  });
-
-  // Add event listeners for edit/delete buttons
-  cardsContainer.querySelectorAll(".edit-purchase-btn").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation(); // Prevent trip toggle
-      openEditPurchaseModal(btn.dataset.id);
-    });
-  });
-  cardsContainer.querySelectorAll(".delete-purchase-btn").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation(); // Prevent trip toggle
-      handleDeletePurchase(btn.dataset.id);
-    });
-  });
-
-  // Add event listeners for desktop table buttons
-  tbody.querySelectorAll(".edit-purchase-btn").forEach(btn => {
-    btn.addEventListener("click", () => openEditPurchaseModal(btn.dataset.id));
-  });
-  tbody.querySelectorAll(".delete-purchase-btn").forEach(btn => {
-    btn.addEventListener("click", () => handleDeletePurchase(btn.dataset.id));
-  });
-}
-
-function populateDashboardFilters(purchaseList) {
-  // Populate category filter
-  const categorySet = new Set();
-  purchaseList.forEach((p) => {
-    categorySet.add(p.category);
-  });
-
-  const categorySelect = document.getElementById("dashboard-filter-category");
-  const currentValue = categorySelect.value;
-  categorySelect.innerHTML = '<option value="">All categories</option>';
-  Array.from(categorySet)
-    .sort()
-    .forEach((cat) => {
-      const option = document.createElement("option");
-      option.value = cat;
-      option.textContent = capitalize(cat);
-      categorySelect.appendChild(option);
-    });
-  categorySelect.value = currentValue;
-
-  // Populate store filter from the global stores array
-  const storeSelect = document.getElementById("dashboard-filter-store");
-  const currentStoreValue = storeSelect.value;
-  storeSelect.innerHTML = '<option value="">All stores</option>';
-  stores.forEach((store) => {
-    const option = document.createElement("option");
-    option.value = store.id;
-    option.textContent = store.name;
-    storeSelect.appendChild(option);
-  });
-  storeSelect.value = currentStoreValue;
-}
-
-function updateDashboardSortIndicators() {
-  document.querySelectorAll(".dashboard-purchases-table th.sortable").forEach((th) => {
-    th.classList.remove("sort-asc", "sort-desc");
-    if (th.dataset.sort === dashboardCurrentSortBy) {
-      th.classList.add(`sort-${dashboardCurrentSortDir}`);
-    }
-  });
-}
-
-function clearDashboardFilters() {
-  document.getElementById("dashboard-filter-category").value = "";
-  document.getElementById("dashboard-filter-store").value = "";
-  dashboardCurrentSortBy = "date";
-  dashboardCurrentSortDir = "asc";
-  loadDashboardPurchases();
-}
-
 function openEditPurchaseModal(purchaseId) {
   const purchase = currentPurchases.find(p => p.id === parseInt(purchaseId));
   if (!purchase) {
-    showError("dashboard-error", "Purchase not found");
+    showError("history-error", "Purchase not found");
     return;
   }
 
@@ -824,8 +544,8 @@ function openEditPurchaseModal(purchaseId) {
       }
 
       closeModal();
-      loadDashboardPurchases();
-      showSuccess("dashboard-success", "Purchase updated ✓");
+      loadHistoryPurchases();
+      showSuccess("history-success", "Purchase updated ✓");
     } catch (err) {
       showError("modal-error", `Error: ${err.message}`);
     } finally {

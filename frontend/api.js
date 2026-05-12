@@ -23,7 +23,7 @@ async function loadProductsAndStores() {
   }
 }
 
-async function prefillPrice() {
+async function prefillPrice(quantity = null) {
   const productSelect = document.getElementById("purchase-product");
   const storeSelect = document.getElementById("purchase-store");
   const priceInput = document.getElementById("purchase-price");
@@ -35,9 +35,11 @@ async function prefillPrice() {
   if (!productId || !storeId) return;
 
   try {
-    const response = await fetch(
-      `${BACKEND_URL}/api/purchases/last-price?product_id=${productId}&store_id=${storeId}`
-    );
+    let url = `${BACKEND_URL}/api/purchases/last-price?product_id=${productId}&store_id=${storeId}`;
+    if (quantity !== null && quantity !== undefined) {
+      url += `&quantity=${quantity}`;
+    }
+    const response = await fetch(url);
     if (!response.ok) return; // Fail silently — pre-fill is best-effort
 
     const data = await response.json();
@@ -106,6 +108,9 @@ async function handleSubmitCart() {
     cart = [];
     purchaseMode = 'product';
     renderCart();
+    activeCategoryFilter = null;
+    renderCategoryChips();
+    applyProductFilters();
     document.getElementById('purchase-preset-buttons').innerHTML = '';
     document.getElementById('mode-product-btn').classList.add('active');
     document.getElementById('mode-oneoff-btn').classList.remove('active');
@@ -408,15 +413,15 @@ async function handleDeletePurchase(purchaseId) {
 
     if (response.status === 204) {
       // Success
-      loadDashboardPurchases();
-      showSuccess("dashboard-success", "Purchase deleted ✓");
+      loadHistoryPurchases();
+      showSuccess("history-success", "Purchase deleted ✓");
     } else {
       const errorData = await response.json().catch(() => ({}));
       const errorMsg = errorData.detail || errorData.message || "Failed to delete purchase";
-      showError("dashboard-error", `Error: ${errorMsg}`);
+      showError("history-error", `Error: ${errorMsg}`);
     }
   } catch (err) {
-    showError("dashboard-error", `Error: ${err.message}`);
+    showError("history-error", `Error: ${err.message}`);
   }
 }
 
@@ -430,17 +435,33 @@ async function loadDashboardSpend() {
     const sevenDayData = await sevenDayResponse.json();
     renderSpendChart(sevenDayData);
 
-    // Fetch monthly total — used only for the days count (avg/day in categories panel)
+    // Fetch monthly total — for the spend panel total text and days count (avg/day)
     const monthResponse = await fetch(`${BACKEND_URL}/api/dashboard/spend?month=${dashboardMonth}`);
     if (monthResponse.ok) {
       const monthData = await monthResponse.json();
-      // Return days count so categories avg can use it
+      const totalEl = document.getElementById("dashboard-spend-month-total");
+      if (totalEl) {
+        const total = monthData.total != null ? parseFloat(monthData.total).toFixed(2) : "0.00";
+        totalEl.textContent = `Spend this month: €${total}`;
+      }
       return monthData.days ? monthData.days.length : 0;
     }
     return 0;
   } catch (err) {
     showError("dashboard-error", `Error loading spend: ${err.message}`);
     return 0;
+  }
+}
+
+async function fetchStoreProducts(storeId) {
+  if (!storeId || !/^\d+$/.test(String(storeId))) return null;
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/stores/${storeId}/products`);
+    if (!response.ok) return null;
+    const ids = await response.json();
+    return ids.length > 0 ? new Set(ids) : null;
+  } catch {
+    return null; // Fail silently — store filter is best-effort
   }
 }
 
@@ -464,39 +485,3 @@ async function loadDashboardCategories(spendDaysCount) {
   }
 }
 
-async function loadDashboardPurchases() {
-  try {
-    const categoryFilter = document.getElementById("dashboard-filter-category").value;
-    const storeFilter = document.getElementById("dashboard-filter-store").value;
-
-    let url = `${BACKEND_URL}/api/purchases?month=${dashboardMonth}&sort_by=${dashboardCurrentSortBy}&sort_dir=${dashboardCurrentSortDir}`;
-    if (categoryFilter) {
-      url += `&category=${encodeURIComponent(categoryFilter)}`;
-    }
-    if (storeFilter) {
-      url += `&store_id=${encodeURIComponent(storeFilter)}`;
-    }
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error("Failed to load purchases");
-    }
-
-    const data = await response.json();
-    renderDashboardPurchases(data);
-    updateDashboardSortIndicators();
-    populateDashboardFilters(data);
-
-    // Update the monthly total to reflect current filter state
-    const hasFilter = !!categoryFilter || !!storeFilter;
-    const filteredTotal = data.reduce((sum, p) => sum + parseFloat(p.price_total), 0);
-    const totalEl = document.getElementById("dashboard-spend-month-total");
-    if (totalEl) {
-      totalEl.textContent = hasFilter
-        ? `Filtered spend: €${filteredTotal.toFixed(2)}`
-        : `Spend this month: €${filteredTotal.toFixed(2)}`;
-    }
-  } catch (err) {
-    showError("dashboard-error", `Error loading purchases: ${err.message}`);
-  }
-}

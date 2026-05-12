@@ -4,6 +4,74 @@
 
 let cart = []; // { id, product_id, product_name, unit, quantity, price_total, notes } OR { type: 'oneoff', description, category, price_total, notes }
 let purchaseMode = 'product'; // 'product' or 'oneoff'
+let activeCategoryFilter = null;  // active category chip value, or null for "all"
+let storeProductIds = null;        // Set of product IDs at selected store, or null for no filter
+
+function applyProductFilters() {
+  const searchInput = document.getElementById("product-search");
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  let filtered = products;
+
+  // Store filter: narrow to products bought at this store
+  if (storeProductIds !== null) {
+    const storeFiltered = filtered.filter(p => storeProductIds.has(p.id));
+    // Fall back to full list if store has no purchase history yet
+    if (storeFiltered.length > 0) {
+      filtered = storeFiltered;
+    }
+  }
+
+  // Category chip filter
+  if (activeCategoryFilter) {
+    filtered = filtered.filter(p => p.category === activeCategoryFilter);
+  }
+
+  // Text search filter
+  if (query) {
+    filtered = filtered.filter(p =>
+      p.name.toLowerCase().includes(query) ||
+      (p.brand && p.brand.toLowerCase().includes(query))
+    );
+  }
+
+  populateProductDropdown(filtered);
+}
+
+function renderCategoryChips() {
+  const container = document.getElementById("product-category-chips");
+  if (!container) return;
+
+  // Derive distinct categories from the full product list
+  const categories = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+
+  container.innerHTML = "";
+
+  // "All" chip
+  const allChip = document.createElement("button");
+  allChip.type = "button";
+  allChip.className = "chip-btn" + (activeCategoryFilter === null ? " active" : "");
+  allChip.textContent = "All";
+  allChip.addEventListener("click", () => {
+    activeCategoryFilter = null;
+    renderCategoryChips();
+    applyProductFilters();
+  });
+  container.appendChild(allChip);
+
+  categories.forEach(cat => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip-btn" + (activeCategoryFilter === cat ? " active" : "");
+    chip.textContent = capitalize(cat);
+    chip.addEventListener("click", () => {
+      activeCategoryFilter = cat;
+      renderCategoryChips();
+      applyProductFilters();
+    });
+    container.appendChild(chip);
+  });
+}
 
 function initializeDateField() {
   const dateInput = document.getElementById("purchase-date");
@@ -36,7 +104,16 @@ function setupPurchaseForm() {
     }
   });
 
-  document.getElementById("purchase-store").addEventListener("change", prefillPrice);
+  document.getElementById("purchase-store").addEventListener("change", async function() {
+    storeProductIds = await fetchStoreProducts(this.value);
+    applyProductFilters();
+    prefillPrice();
+  });
+
+  const searchInput = document.getElementById("product-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", () => applyProductFilters());
+  }
 
   document.getElementById("submit-cart-btn").addEventListener("click", handleSubmitCart);
 
@@ -167,7 +244,7 @@ function renderCart() {
 
   cartItems.innerHTML = cart.map((item, index) => {
     const displayName = item.type === 'oneoff'
-      ? `${escapeHtml(item.description)} <span class="badge">${capitalize(item.category)}</span>`
+      ? `${escapeHtml(item.description)} <span class="badge">${escapeHtml(capitalize(item.category))}</span>`
       : escapeHtml(item.product_name);
 
     const qtyStr = item.quantity ? `${item.quantity}${item.unit || ""}` : (item.type === 'oneoff' ? "—" : null);
@@ -285,6 +362,7 @@ function renderPresetButtons() {
     btn.textContent = preset.label;
     btn.addEventListener('click', () => {
       document.getElementById('purchase-quantity').value = preset.quantity;
+      prefillPrice(preset.quantity);
     });
     container.appendChild(btn);
   });

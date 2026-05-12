@@ -1282,3 +1282,178 @@ h2 {
   margin-top: 10px;
   line-height: 1.5;
 }
+
+/* ============================================================
+   History Tab
+   ============================================================ */
+
+/* Search input in history filter bar */
+.history-search-input {
+  flex: 2;
+  min-width: 160px;
+  padding: 10px 12px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: white;
+}
+
+.history-search-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+/* History table — extra padding for breathing room */
+.history-purchases-table td,
+.history-purchases-table th {
+  padding: 10px 12px;
+}
+
+/* History sortable th — reuse same cursor/transition as .sortable */
+.history-purchases-table th.history-sortable {
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.history-purchases-table th.history-sortable:hover {
+  background: #f0f6ff;
+}
+
+/* Day group container */
+.history-day-group {
+  margin-bottom: 12px;
+}
+
+/* Day header — clickable, parent-level row */
+.history-day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s;
+}
+
+.history-day-header:hover {
+  background-color: #e2e8f0;
+}
+
+.history-day-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-day-date {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.history-day-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.history-day-total {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  white-space: nowrap;
+}
+
+.history-day-chevron {
+  font-size: 1.2rem;
+  color: #64748b;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+/* Day trips container — hidden by default */
+.history-day-trips {
+  display: none;
+  padding: 8px 0 0 12px;
+}
+
+/* Expanded state */
+.history-day-group.expanded .history-day-trips {
+  display: block;
+}
+
+.history-day-group.expanded .history-day-chevron {
+  transform: rotate(90deg);
+}
+
+/* On mobile: show cards, hide history table */
+@media (max-width: 767px) {
+  .history-purchases-table {
+    display: none;
+  }
+}
+
+/* On desktop: show history table, hide cards */
+@media (min-width: 768px) {
+  #history-purchases-cards {
+    display: none;
+  }
+  .history-purchases-table {
+    display: table;
+  }
+}
+
+/* ============================================================================
+   Product Selection UX — T-027
+   ============================================================================ */
+
+.category-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.chip-btn {
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid #d0d0d0;
+  background: transparent;
+  color: #1a1a1a;
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.chip-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.chip-btn.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.product-search-input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: white;
+  color: #1a1a1a;
+  box-sizing: border-box;
+}
+
+.product-search-input:focus {
+  outline: none;
+  border-color: #2563eb;
+}

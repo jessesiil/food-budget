@@ -14,6 +14,7 @@ Phase 1 endpoints (product + purchase management):
 - PUT    /api/products/{id}       : update a product
 - DELETE /api/products/{id}       : delete a product
 - GET    /api/purchases/last-price : last price for a product+store combination
+- GET    /api/stores/{store_id}/products : distinct product IDs purchased at a store
 - POST   /api/purchases/batch     : log multiple purchases in one transaction
 - POST   /api/purchases           : log a purchase
 - GET    /api/purchases           : list purchases (with filters)
@@ -32,7 +33,7 @@ import json
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from datetime import date as _Date
-from typing import Literal
+from typing import Literal, Optional
 import logging
 
 import psycopg
@@ -554,11 +555,28 @@ def get_last_price(
     request: Request,
     product_id: int = Query(..., description="Product ID"),
     store_id: int = Query(..., description="Store ID"),
+    quantity: Optional[float] = Query(None, description="Preset quantity for exact-match lookup"),
 ):
-    """Returns the price_total from the most recent purchase of a product at a store."""
+    """Returns the price_total from the most recent purchase of a product at a store.
+    If quantity is provided, tries exact-quantity match first, then falls back to any quantity."""
     try:
         with get_db() as conn:
             with conn.cursor() as cur:
+                if quantity is not None:
+                    cur.execute(
+                        """
+                        SELECT price_total
+                        FROM purchases
+                        WHERE product_id = %s AND store_id = %s AND quantity = %s
+                        ORDER BY date DESC, created_at DESC
+                        LIMIT 1
+                        """,
+                        (product_id, store_id, quantity),
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        return {"price": float(row[0])}
+                # Fallback: any quantity (or primary path if quantity not provided)
                 cur.execute(
                     """
                     SELECT price_total
@@ -575,6 +593,29 @@ def get_last_price(
         raise
     except Exception as e:
         logger.error("Unexpected error in get_last_price: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/stores/{store_id}/products")
+@limiter.limit("60/minute")
+def get_store_products(request: Request, store_id: int):
+    """Returns distinct product IDs purchased at a given store."""
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT product_id
+                    FROM purchases
+                    WHERE store_id = %s AND product_id IS NOT NULL
+                    """,
+                    (store_id,),
+                )
+                return [row[0] for row in cur.fetchall()]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error in get_store_products: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
